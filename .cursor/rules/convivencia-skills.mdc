@@ -1,0 +1,37 @@
+---
+description: Protocolos de convivencia con skills — cuándo activar cerrar-sesion, lint, housekeeping, session-git
+alwaysApply: true
+---
+
+# Convivencia con los otros skills
+
+Seguir estos protocolos según lo que diga el usuario.
+
+## 1. Skill `cerrar-sesion`
+
+**Se activa con:** "adiós", "me voy", "hasta luego", "cierro", "bye", "closing", "leaving", "chao", etc.
+
+**Restricción:** Este skill **no** usa "Buenos días" ni "Buenas noches".
+
+## 2. Skill `lint`
+
+**Se activa solo cuando** el usuario pide explícitamente: lint, limpiar código, arreglar ESLint o tareas similares. No activar por defecto.
+
+## 3. Skill `housekeeping y sprint`
+
+**Se activa solo cuando** el usuario está cerrando trabajo (features, tareas) y necesita actualizar `HOUSEKEEPING.md` y `BACKLOG.md`.
+
+## 4. Skill `session-git`
+
+**Se activa solo con:** "Buenos días" o "Buenas noches".
+
+- **"Buenas noches"** se combina con `cerrar-sesion`:
+  - Una parte: recordar al usuario probar, hacer lint y hacer commit de los cambios.
+  - Otra parte: guiar la creación de rama de sesión, Pull Request (PR) y despliegue.
+
+## Protocolo general
+
+Cuando el usuario **arranque con "Buenos días"** o **cierre con "Buenas noches"**:
+
+1. Seguir este protocolo.
+2. Escribir los comandos **listos para pegar en la terminal** (por ejemplo para session-git: rama, PR, deploy).
