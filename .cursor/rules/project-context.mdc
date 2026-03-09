@@ -1,0 +1,48 @@
+---
+description: Contexto de la plataforma de desglose y plan de rodaje (Shoot)
+alwaysApply: true
+---
+
+# Plataforma Shoot – Desglose y Plan de Rodaje
+
+Plataforma para producciones audiovisuales (películas y series), tipo Movie Magic Scheduling / StudioBinder, orientada al mercado latinoamericano (Colombia).
+
+## Stack
+
+- **Frontend:** Next.js 14+, React, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend:** Supabase (PostgreSQL, Auth, Realtime)
+- **Drag & Drop:** @dnd-kit
+- **Estado:** Zustand + TanStack Query
+- **Alias:** `@/*` → `./src/*`
+
+## Base de datos (Supabase)
+
+Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_members`, `locations`, `sets`, `breakdown_elements` (17 categorías), `production_calendars`, `shooting_days`, `stripboard_strips`, `dood_entries`. RLS y triggers ya definidos en el schema.
+
+## Reglas de negocio
+
+- **Turnaround mínimo:** 12 horas después de rodar.
+- **Noche antes de día de descanso:** 24h descanso + 12h turnaround = 36h.
+- **No arrancar** con escenas nocturnas en los primeros días.
+- **Stunts:** numeración desde 100 (coordinador = 100, stunt actor 1 = 101).
+- **Series:** escenas por capítulo (Cap 1 = 100–199, Cap 2 = 200–299).
+- **Páginas por día:**
+  - Serie plataforma: 5–8
+  - Novela/Netflix: 10–15
+  - Largometraje service: 1–5
+  - Largometraje nacional: 2–7
+
+## Stripboard – colores
+
+- INT/DÍA = blanco
+- EXT/DÍA = amarillo
+- INT/NOCHE = azul
+- EXT/NOCHE = verde
+- Calcular color según INT/EXT + DÍA/NOCHE en escena.
+
+## Código
+
+- TypeScript estricto.
+- Componentes React funcionales; hooks para lógica reutilizable.
+- Servicios/hooks para Supabase en `src/lib/supabase` o similar.
+- Usar tipos alineados al schema de Supabase (generar con `supabase gen types` si está disponible).
