@@ -36,6 +36,9 @@ export interface Project {
   code: string | null
   project_type: ProjectType
   description: string | null
+  script_content: string | null
+  script_file_path: string | null
+  script_file_name: string | null
   created_at: string
   updated_at: string
   user_id: string

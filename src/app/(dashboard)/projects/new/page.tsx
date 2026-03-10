@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -25,40 +25,91 @@ import {
 } from '@/components/ui/select'
 import { PROJECT_TYPES } from '@/lib/constants/project-types'
 import type { ProjectType } from '@/types'
+import { Upload, FileUp } from 'lucide-react'
+
+const BUCKET = 'project-scripts'
+const SCRIPT_PATH = (projectId: string) => `${projectId}/script.pdf`
+
+function storageErrorMessage(err: { message: string }): string {
+  const m = err.message.toLowerCase()
+  if (m.includes('case not found') || m.includes('bucket not found') || m.includes('not found'))
+    return `El bucket "${BUCKET}" no existe. Créalo en Supabase → Storage → New bucket (nombre exacto: ${BUCKET}).`
+  return err.message
+}
 
 export default function NewProjectPage() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [projectType, setProjectType] = useState<ProjectType>('serie_plataforma')
+  const [scriptFile, setScriptFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!scriptFile || scriptFile.type !== 'application/pdf') {
+      setError('Debes subir el PDF del guion.')
+      return
+    }
     setLoading(true)
     setError(null)
     const supabase = createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    const userId = user?.id ?? ''
-    const { data, error: err } = await supabase
-      .from('projects')
-      .insert({
+    if (!user?.id) {
+      setError('Debes iniciar sesión para crear un proyecto.')
+      setLoading(false)
+      return
+    }
+    const createRes = await fetch('/api/projects/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         name,
         code: code || null,
         project_type: projectType,
-        user_id: userId,
-      })
-      .select('id')
-      .single()
-    setLoading(false)
-    if (err) {
-      setError(err.message)
+      }),
+    })
+    const text = await createRes.text()
+    let createJson: { id?: string; error?: string; code?: string; details?: string } = {}
+    if (text) {
+      try {
+        createJson = JSON.parse(text) as typeof createJson
+      } catch {
+        setError('Respuesta inválida del servidor')
+        setLoading(false)
+        return
+      }
+    }
+    if (!createRes.ok) {
+      const msg = createJson.error ?? 'No se pudo crear el proyecto'
+      const extra = [createJson.code, createJson.details].filter(Boolean).join(' — ')
+      setError(extra ? `${msg} (${extra})` : msg)
+      setLoading(false)
       return
     }
-    if (data?.id) router.push(`/projects/${data.id}`)
+    const projectId = createJson.id
+    if (!projectId) {
+      setLoading(false)
+      return
+    }
+    const formData = new FormData()
+    formData.set('file', scriptFile)
+    const uploadRes = await fetch(`/api/projects/${projectId}/upload-script`, {
+      method: 'POST',
+      body: formData,
+    })
+    const uploadJson = (await uploadRes.json()) as { error?: string }
+    if (!uploadRes.ok) {
+      setError(uploadJson.error ?? 'Error al subir el PDF')
+      setLoading(false)
+      return
+    }
+    setLoading(false)
+    router.push(`/projects/${projectId}`)
   }
 
   return (
@@ -121,6 +172,46 @@ export default function NewProjectPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="script-pdf">
+                Guion (PDF) <span className="text-destructive">*</span>
+              </Label>
+              <input
+                ref={fileInputRef}
+                id="script-pdf"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => setScriptFile(e.target.files?.[0] ?? null)}
+                required
+                className="hidden"
+              />
+              <label
+                htmlFor="script-pdf"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 py-8 transition-colors hover:bg-muted/50"
+              >
+                {scriptFile ? (
+                  <>
+                    <FileUp className="size-10 text-muted-foreground" />
+                    <span className="mt-2 text-sm font-medium text-foreground">
+                      {scriptFile.name}
+                    </span>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      Haz clic para cambiar el PDF
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="size-10 text-muted-foreground" />
+                    <span className="mt-2 text-sm font-medium text-foreground">
+                      Subir PDF del guion
+                    </span>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      Solo archivos PDF. Obligatorio para crear el proyecto.
+                    </span>
+                  </>
+                )}
+              </label>
             </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>

@@ -2,9 +2,11 @@
 
 import { SceneCard } from './SceneCard'
 import { ImportScriptDialog } from './ImportScriptDialog'
+import { ScriptSection } from './ScriptSection'
 import { buttonVariants } from '@/components/ui/button'
+import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
 import { cn } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { Layers, Plus } from 'lucide-react'
 import Link from 'next/link'
 
 interface SceneRow {
@@ -37,12 +39,18 @@ interface SceneRow {
 export interface BreakdownSheetProps {
   projectId: string
   projectName: string
+  initialScriptContent?: string
+  initialScriptFilePath?: string | null
+  initialScriptFileName?: string | null
   initialScenes: SceneRow[]
 }
 
 export function BreakdownSheet({
   projectId,
   projectName,
+  initialScriptContent = '',
+  initialScriptFilePath = null,
+  initialScriptFileName = null,
   initialScenes,
 }: BreakdownSheetProps) {
   const castNumbers = (row: SceneRow) =>
@@ -54,8 +62,27 @@ export function BreakdownSheet({
       (c) => c.cast_members && c.cast_members.cast_number >= 100
     ).map((c) => c.cast_members!.cast_number)
 
+  const categoryCounts: Record<string, number> = {}
+  for (const scene of initialScenes) {
+    for (const e of scene.scene_elements ?? []) {
+      const cat = e.breakdown_elements?.category
+      if (cat) {
+        const label = BREAKDOWN_CATEGORIES[cat as keyof typeof BREAKDOWN_CATEGORIES]?.label ?? cat
+        categoryCounts[label] = (categoryCounts[label] ?? 0) + 1
+      }
+    }
+  }
+  const hasElements = Object.keys(categoryCounts).length > 0
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <ScriptSection
+        projectId={projectId}
+        initialScriptContent={initialScriptContent ?? ''}
+        initialScriptFilePath={initialScriptFilePath}
+        initialScriptFileName={initialScriptFileName}
+        initialScenesCount={initialScenes.length}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {initialScenes.length} escena{initialScenes.length !== 1 ? 's' : ''}
@@ -91,7 +118,28 @@ export function BreakdownSheet({
           </div>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-6">
+          {hasElements && (
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Layers className="size-4" />
+                Elementos por categoría
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(categoryCounts)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([label, count]) => (
+                    <span
+                      key={label}
+                      className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                    >
+                      {label} ({count})
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
           {initialScenes.map((scene) => {
             const setRow = Array.isArray(scene.sets) ? scene.sets[0] : scene.sets
             const loc = setRow?.locations
@@ -133,6 +181,7 @@ export function BreakdownSheet({
             />
             )
           })}
+          </div>
         </div>
       )}
     </div>

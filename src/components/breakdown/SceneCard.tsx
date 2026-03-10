@@ -2,15 +2,11 @@
 
 import { getStripColor } from '@/lib/constants/strip-colors'
 import { STRIP_COLORS } from '@/lib/constants/strip-colors'
+import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
 import { formatEighths } from '@/lib/utils/eighths'
 import type { IntExt, DayNight } from '@/types'
 import { cn } from '@/lib/utils'
-import { ElementTag } from './ElementTag'
 import type { BreakdownCategoryKey } from '@/types'
-
-interface SceneCastMember {
-  cast_members?: { character_name: string; cast_number: number } | null
-}
 
 interface SceneElementItem {
   breakdown_elements?: { name: string; category: BreakdownCategoryKey } | null
@@ -34,6 +30,18 @@ interface SceneCardProps {
   onClick?: () => void
 }
 
+function groupElementsByCategory(elements: SceneElementItem[]) {
+  const byCat: Record<string, string[]> = {}
+  for (const e of elements) {
+    if (!e.breakdown_elements?.name) continue
+    const cat = e.breakdown_elements.category
+    const label = BREAKDOWN_CATEGORIES[cat]?.label ?? cat
+    if (!byCat[label]) byCat[label] = []
+    byCat[label].push(e.breakdown_elements.name)
+  }
+  return byCat
+}
+
 export function SceneCard({
   sceneNumber,
   intExt,
@@ -53,65 +61,99 @@ export function SceneCard({
 }: SceneCardProps) {
   const colorKey = getStripColor(intExt, dayNight)
   const stripStyle = STRIP_COLORS[colorKey]
+  const elementsByCategory = groupElementsByCategory(elements)
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'w-full rounded-lg border border-border p-3 text-left text-[11px] leading-tight shadow-sm transition-shadow',
+        'w-full overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-shadow hover:shadow-md',
         isSelected && 'ring-2 ring-primary ring-offset-2'
       )}
-      style={{
-        backgroundColor: stripStyle.bg,
-        color: stripStyle.textColor ?? undefined,
-      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-semibold">{sceneNumber}</span>
-        <span className="rounded bg-black/10 px-1.5 py-0.5 text-[10px]">
-          {intExt}/{dayNight}
-        </span>
-      </div>
-      {(setLocationName || locationName) && (
-        <div className="mt-1 font-medium opacity-90">
-          {setLocationName && <span>{setLocationName}</span>}
-          {setLocationName && locationName && ' · '}
-          {locationName && <span className="text-[10px]">{locationName}</span>}
+      <div className="flex min-h-[120px]">
+        {/* Franja de color tipo stripboard (formato Movie Magic) */}
+        <div
+          className="w-2 shrink-0"
+          style={{ backgroundColor: stripStyle.bg }}
+          aria-label={`${intExt} ${dayNight}`}
+        />
+        <div className="flex-1 p-4">
+          {/* Fila 1: Scene, Int/Ext, Set, Day/Night, Págs */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="font-semibold text-foreground">
+              Escena {sceneNumber}
+            </span>
+            <span
+              className="rounded px-1.5 py-0.5 text-xs font-medium"
+              style={{
+                backgroundColor: `${stripStyle.bg}`,
+                color: stripStyle.textColor ?? 'inherit',
+              }}
+            >
+              {intExt} / {dayNight}
+            </span>
+            {(setLocationName || locationName) && (
+              <span className="text-muted-foreground">
+                {setLocationName}
+                {setLocationName && locationName ? ` · ${locationName}` : ''}
+              </span>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {formatEighths(pageEighths)} pág.
+            </span>
+          </div>
+
+          {/* Sinopsis */}
+          {synopsis && (
+            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+              {synopsis}
+            </p>
+          )}
+
+          {/* Cast / Stunts */}
+          {(castNumbers.length > 0 || stuntNumbers.length > 0) && (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {castNumbers.length > 0 && (
+                <span className="rounded-md bg-muted px-2 py-0.5">
+                  Cast: {castNumbers.join(', ')}
+                </span>
+              )}
+              {stuntNumbers.length > 0 && (
+                <span className="rounded-md bg-muted px-2 py-0.5">
+                  Stunts: {stuntNumbers.join(', ')}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Elementos por categoría (formato Breakdown Sheet) */}
+          {Object.keys(elementsByCategory).length > 0 && (
+            <div className="mt-3 border-t border-border pt-2">
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                {Object.entries(elementsByCategory).map(([label, names]) => (
+                  <div key={label} className="flex flex-wrap items-baseline gap-1">
+                    <span className="font-medium text-muted-foreground">
+                      {label}:
+                    </span>
+                    <span className="text-foreground">
+                      {names.slice(0, 3).join(', ')}
+                      {names.length > 3 ? ` (+${names.length - 3})` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STU / SFX / VFX */}
+          <div className="mt-2 flex gap-3 text-[10px] text-muted-foreground">
+            <span>STU {hasStunts ? '✓' : '—'}</span>
+            <span>SFX {hasSfx ? '✓' : '—'}</span>
+            <span>VFX {hasVfx ? '✓' : '—'}</span>
+          </div>
         </div>
-      )}
-      {synopsis && (
-        <p className="mt-1 line-clamp-2 opacity-90">{synopsis}</p>
-      )}
-      <div className="mt-2 flex flex-wrap gap-1">
-        {castNumbers.length > 0 && (
-          <span className="rounded bg-black/10 px-1">
-            Cast: {castNumbers.join(', ')}
-          </span>
-        )}
-        {stuntNumbers.length > 0 && (
-          <span className="rounded bg-black/10 px-1">
-            Stunts: {stuntNumbers.join(', ')}
-          </span>
-        )}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {elements.map(
-          (e) =>
-            e.breakdown_elements && (
-              <ElementTag
-                key={e.breakdown_elements.name}
-                name={e.breakdown_elements.name}
-                category={e.breakdown_elements.category}
-              />
-            )
-        )}
-      </div>
-      <div className="mt-2 flex gap-2 text-[10px] opacity-80">
-        <span>STU {hasStunts ? '☑' : '☐'}</span>
-        <span>SFX {hasSfx ? '☑' : '☐'}</span>
-        <span>VFX {hasVfx ? '☑' : '☐'}</span>
-        <span>{formatEighths(pageEighths)} pgs</span>
       </div>
     </button>
   )

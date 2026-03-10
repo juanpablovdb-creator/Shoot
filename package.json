@@ -7,7 +7,9 @@
     "dev:clean": "node -e \"try{require('fs').unlinkSync('.next/dev/lock')}catch(e){}\" && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:push": "supabase db push",
+    "db:link": "supabase link"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -23,6 +25,8 @@
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.5.207",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "shadcn": "^4.0.2",
@@ -37,6 +41,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "open": "^11.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

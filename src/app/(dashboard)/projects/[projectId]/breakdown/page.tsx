@@ -13,7 +13,7 @@ export default async function BreakdownPage({
   const supabase = await createClient()
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('id, name')
+    .select('id, name, script_content, script_file_path, script_file_name')
     .eq('id', projectId)
     .single()
 
@@ -51,6 +51,9 @@ export default async function BreakdownPage({
         <BreakdownSheet
           projectId={projectId}
           projectName={project.name}
+          initialScriptContent={project.script_content ?? ''}
+          initialScriptFilePath={project.script_file_path ?? null}
+          initialScriptFileName={project.script_file_name ?? null}
           initialScenes={(scenes ?? []) as unknown as BreakdownSheetProps['initialScenes']}
         />
       </div>

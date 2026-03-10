@@ -1,0 +1,20 @@
+# Configuración de Supabase CLI para Shoot.
+# Ver: https://supabase.com/docs/guides/cli/config
+
+project_id = "shoot"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+major_version = 15
+
+[db.migrations]
+# Las migraciones en supabase/migrations/ se aplican con: supabase db push
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
