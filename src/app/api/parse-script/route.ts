@@ -72,24 +72,23 @@ REGLAS ESTRICTAS:
 
 3) Categorías permitidas (usa exactamente estas claves en minúsculas): ${categoriesList}
 
-4) Cómo rellenar elements:
-   - cast: personajes con diálogo o nombre. Formato "N. Nombre (descripción)" si hay número de personaje, si no "Nombre personaje"
-   - figurantes / extras: gente de fondo con cantidad cuando se indique, ej. "Clientes del bar (8)", "Meseros (2)"
-   - utileria: objetos que se usan o se ven (props)
-   - vestuario: prendas o looks relevantes por personaje
-   - arte: decoración, set dressing, carteles, atrezzo visible
-   - vehiculos: coches, motos, barcos, etc. que aparezcan
-   - stunts: acrobacias, peleas, caídas; spfx: efectos prácticos (humo, fuego); vfx: efectos digitales
-   - armas, animales, coordinacion_intimidad: cuando apliquen
-   - grafica_archivo: pantallas, periódicos, fotos que se vean; musica: si se especifica una canción o tipo de música
+4) OBLIGATORIO: Cada escena DEBE tener el array "elements" rellenado. No dejes elements vacío.
+   - cast (OBLIGATORIO EN TODAS LAS ESCENAS): Por cada personaje que aparezca, hable o sea nombrado en la escena, añade exactamente un objeto con category "cast" y name con el nombre del personaje. Ejemplo: si en la escena salen David y Adriana, elements DEBE incluir {"category":"cast","name":"David"} y {"category":"cast","name":"Adriana"}. Sin excepción. Si la sinopsis o el diálogo mencionan a alguien, ese personaje va en cast.
+   - stunts: si hay peleas, caídas, acrobacias o acción física, añade al menos un element {"category":"stunts","name":"descripción breve"}.
+   - spfx: si hay efectos prácticos (humo, lluvia, fuego, sangre práctica, explosiones prácticas), añade elements con category "spfx".
+   - vfx: si hay efectos digitales (pantalla verde, CGI, composición), añade elements con category "vfx".
+   Resto de categorías cuando apliquen: figurantes, extras, utileria, vestuario, arte, vehiculos, armas, animales, coordinacion_intimidad, grafica_archivo, musica.
    Incluye TODOS los elementos que se mencionen o se infieran en la escena.
 
 5) Una escena = una cabecera de escena (INT/EXT, LOCACIÓN, DÍA/NOCHE). Si el guion tiene cortes dentro del mismo lugar (ej. diferentes ángulos), puede ser una sola escena con varios elements; si cambia locación o momento, es otra escena.
 
-EJEMPLO de una escena en el JSON:
+EJEMPLO escena solo diálogo:
 {"sceneNumber":"1","intExt":"INT","dayNight":"DÍA","synopsis":"María llega al bar y pide un café. Habla con el mesero.","pageEighths":12,"sceneHeading":"BAR LA ESQUINA - INTERIOR","scriptPage":1,"elements":[{"category":"cast","name":"María"},{"category":"cast","name":"Mesero"},{"category":"figurantes","name":"Clientes (3)"},{"category":"utileria","name":"Taza café"},{"category":"arte","name":"Bar con estantes"}]}
 
-Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}, sin ningún otro texto.`
+EJEMPLO escena con acción y efectos (incluir stunts/spfx/vfx cuando correspondan):
+{"sceneNumber":"5","intExt":"EXT","dayNight":"NOCHE","synopsis":"Persecución en coche; choque y explosión.","pageEighths":16,"sceneHeading":"CARRETERA - NOCHE","scriptPage":3,"elements":[{"category":"cast","name":"Ana"},{"category":"cast","name":"Villano"},{"category":"stunts","name":"Persecución en vehículo"},{"category":"stunts","name":"Choque"},{"category":"spfx","name":"Explosión práctica"},{"category":"vfx","name":"Fuego y humo (post)"},{"category":"vehiculos","name":"Coche Ana"},{"category":"vehiculos","name":"Coche villano"}]}
+
+Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}, sin ningún otro texto. IMPORTANTE: En cada escena, el array "elements" debe contener un objeto {"category":"cast","name":"Nombre"} por cada personaje que aparezca o hable; si no incluyes cast, el desglose queda incompleto.`
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -135,15 +134,20 @@ Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}, sin ningún otro texto.`
       )
     }
 
+    const CAT_ALIASES: Record<string, BreakdownCategoryKey> = {
+      personajes: 'cast',
+      characters: 'cast',
+    }
     // Normalizar categorías y filtrar elementos inválidos
     const scenes = parsed.scenes.map((s: unknown) => {
       const scene = s as Record<string, unknown>
       const elements = Array.isArray(scene.elements)
         ? (scene.elements as Array<{ category?: string; name?: string }>)
             .map((el) => {
-              const cat = String(el?.category ?? '').toLowerCase().trim()
+              let cat = String(el?.category ?? '').toLowerCase().trim()
               const name = String(el?.name ?? '').trim()
               if (!name) return null
+              if (CAT_ALIASES[cat]) cat = CAT_ALIASES[cat]
               const validCat: BreakdownCategoryKey | null = VALID_CATEGORIES.has(cat)
                 ? (cat as BreakdownCategoryKey)
                 : null

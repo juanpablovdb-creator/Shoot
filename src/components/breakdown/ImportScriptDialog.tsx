@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
   DialogContent,
@@ -13,26 +12,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { FileText } from 'lucide-react'
-import { extractTextFromPdf } from '@/lib/pdf-utils'
-import type { BreakdownCategoryKey } from '@/types'
-
-const DEFAULT_LOCATION_NAME = 'Locaciones del guion'
-
-interface ParsedElement {
-  category: string
-  name: string
-}
-
-interface ParsedScene {
-  sceneNumber?: string
-  intExt?: string
-  dayNight?: string
-  synopsis?: string
-  pageEighths?: number
-  sceneHeading?: string
-  scriptPage?: number | null
-  elements?: ParsedElement[]
-}
+import {
+  createScenesFromParsed,
+  type ParsedScene,
+} from '@/lib/breakdown-import'
 
 export function ImportScriptDialog({
   projectId,
@@ -87,16 +70,23 @@ export function ImportScriptDialog({
     try {
       let res: Response
       if (pdfFile) {
-        // Extraer texto en el navegador (evita el worker de PDF en el servidor)
-        let extractedText: string
-        try {
-          extractedText = await extractTextFromPdf(pdfFile)
-        } catch (e) {
-          setError(`No se pudo extraer texto del PDF. ${e instanceof Error ? e.message : String(e)}`)
+        const formData = new FormData()
+        formData.set('file', pdfFile)
+        const extractRes = await fetch('/api/extract-pdf', {
+          method: 'POST',
+          body: formData,
+        })
+        const extractData = (await extractRes.json()) as { text?: string; error?: string; details?: string }
+        if (!extractRes.ok) {
+          setError(
+            extractData.error ?? 'No se pudo extraer texto del PDF.'
+              + (extractData.details ? ` ${extractData.details}` : '')
+          )
           setLoading(false)
           return
         }
-        if (!extractedText.trim()) {
+        const extractedText = (extractData.text ?? '').trim()
+        if (!extractedText) {
           setError('El PDF no tiene texto extraíble (puede ser solo imágenes). Prueba pegar el texto del guion.')
           setLoading(false)
           return
@@ -104,7 +94,7 @@ export function ImportScriptDialog({
         res = await fetch('/api/parse-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: extractedText.trim(), projectId }),
+          body: JSON.stringify({ text: extractedText, projectId }),
         })
       } else {
         res = await fetch('/api/parse-script', {
@@ -128,161 +118,23 @@ export function ImportScriptDialog({
         return
       }
 
-      const supabase = createClient()
-
-      const { data: existing } = await supabase
-        .from('scenes')
-        .select('scene_number_sort')
-        .eq('project_id', projectId)
-        .order('scene_number_sort', { ascending: false })
-        .limit(1)
-        .single()
-      let nextSort = (existing?.scene_number_sort ?? 0) + 1
-
-      const { data: locs } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('name', DEFAULT_LOCATION_NAME)
-        .limit(1)
-      let defaultLocationId = locs?.[0]?.id
-      if (!defaultLocationId) {
-        const { data: newLoc } = await supabase
-          .from('locations')
-          .insert({ project_id: projectId, name: DEFAULT_LOCATION_NAME })
-          .select('id')
-          .single()
-        defaultLocationId = newLoc?.id ?? null
-      }
-
-      const setIdsByHeading: Record<string, string> = {}
-      let inserted = 0
-
-      for (const s of scenes) {
-        const sceneNumber = String(s.sceneNumber ?? inserted + 1)
-        const intExt = (s.intExt === 'EXT' ? 'EXT' : 'INT') as 'INT' | 'EXT'
-        const dayNight = ['DÍA', 'NOCHE', 'AMANECER', 'ATARDECER'].includes(
-          s.dayNight ?? ''
-        )
-          ? (s.dayNight as 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER')
-          : 'DÍA'
-        const pageEighths = Math.max(1, Math.min(128, Number(s.pageEighths) || 8))
-        const sceneHeading = (s.sceneHeading ?? '').trim().slice(0, 200)
-        const elements = Array.isArray(s.elements) ? s.elements : []
-
-        let setId: string | null = null
-        if (sceneHeading && defaultLocationId) {
-          if (setIdsByHeading[sceneHeading]) {
-            setId = setIdsByHeading[sceneHeading]
-          } else {
-            const { data: existingSet } = await supabase
-              .from('sets')
-              .select('id')
-              .eq('project_id', projectId)
-              .eq('location_id', defaultLocationId)
-              .eq('name', sceneHeading)
-              .limit(1)
-              .single()
-            if (existingSet?.id) {
-              setId = existingSet.id
-              setIdsByHeading[sceneHeading] = existingSet.id
-            } else {
-              const { data: newSet } = await supabase
-                .from('sets')
-                .insert({
-                  project_id: projectId,
-                  location_id: defaultLocationId,
-                  name: sceneHeading,
-                })
-                .select('id')
-                .single()
-              if (newSet?.id) {
-                setId = newSet.id
-                setIdsByHeading[sceneHeading] = newSet.id
-              }
-            }
-          }
-        }
-
-        const hasStunts = elements.some((el) => el.category === 'stunts')
-        const hasSfx = elements.some((el) => el.category === 'spfx')
-        const hasVfx = elements.some((el) => el.category === 'vfx')
-
-        const { data: newScene, error: insertErr } = await supabase
-          .from('scenes')
-          .insert({
-            project_id: projectId,
-            scene_number: sceneNumber,
-            scene_number_sort: nextSort,
-            int_ext: intExt,
-            day_night: dayNight,
-            synopsis: (s.synopsis ?? '').slice(0, 500) || null,
-            page_eighths: pageEighths,
-            set_id: setId,
-            has_stunts: hasStunts,
-            has_sfx: hasSfx,
-            has_vfx: hasVfx,
-          })
-          .select('id')
-          .single()
-
-        if (insertErr || !newScene?.id) continue
-
-        inserted++
-        nextSort++
-
-        for (const el of elements) {
-          const cat = el.category as BreakdownCategoryKey
-          const name = el.name.slice(0, 500)
-          if (!name) continue
-
-          const { data: existingEl } = await supabase
-            .from('breakdown_elements')
-            .select('id')
-            .eq('project_id', projectId)
-            .eq('category', cat)
-            .eq('name', name)
-            .limit(1)
-            .single()
-
-          let elementId = existingEl?.id
-          if (!elementId) {
-            const { data: newEl } = await supabase
-              .from('breakdown_elements')
-              .insert({
-                project_id: projectId,
-                category: cat,
-                name,
-              })
-              .select('id')
-              .single()
-            elementId = newEl?.id
-          }
-          if (elementId) {
-            await supabase.from('scene_elements').insert({
-              scene_id: newScene.id,
-              breakdown_element_id: elementId,
-            })
-          }
-        }
-      }
-
-      if (!isPdf && textToSend && inserted > 0) {
-        await supabase
-          .from('projects')
-          .update({ script_content: textToSend.slice(0, 500000) })
-          .eq('id', projectId)
-      }
+      const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
+        saveScriptContent: !isPdf && textToSend ? textToSend : undefined,
+      })
 
       setCreated(inserted)
+      router.refresh()
       if (inserted > 0) {
-        router.refresh()
         setTimeout(() => {
           setOpen(false)
           setText('')
           setPdfFile(null)
           setCreated(null)
         }, 1500)
+      } else if (skipped > 0) {
+        setError(
+          `${skipped} escena${skipped !== 1 ? 's' : ''} ya existían. No se duplicaron. Cierra y revisa el desglose.`
+        )
       } else {
         setError('No se pudieron crear escenas en la base de datos.')
       }

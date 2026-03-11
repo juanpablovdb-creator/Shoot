@@ -1,13 +1,8 @@
 /**
  * Utilidades para PDF en el cliente (conteo de páginas, extracción de texto).
- * Usa pdfjs-dist; el worker se carga desde CDN para evitar problemas con bundling.
+ * pdfjs-dist se carga con import dinámico para no ejecutarse en el servidor (DOMMatrix no existe en Node).
+ * El worker se carga desde CDN.
  */
-
-import * as pdfjsLib from 'pdfjs-dist'
-
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-}
 
 type PdfSource = string | File | ArrayBuffer
 
@@ -17,13 +12,25 @@ function getDocumentSource(source: PdfSource): string | ArrayBuffer | { url: str
   return { data: source as unknown as ArrayBuffer }
 }
 
+async function getPdfjsLib() {
+  if (typeof window === 'undefined') {
+    throw new Error('La extracción de PDF solo está disponible en el navegador.')
+  }
+  const pdfjsLib = await import('pdfjs-dist')
+  // Worker desde /public para evitar que el bundler resuelva mal en server (Cannot find module pdf.worker.mjs)
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+  return pdfjsLib
+}
+
 export async function getPdfPageCount(source: PdfSource): Promise<number> {
+  const pdfjsLib = await getPdfjsLib()
   const src = source instanceof File ? { data: await source.arrayBuffer() } : getDocumentSource(source)
   const doc = await pdfjsLib.getDocument(src).promise
   return doc.numPages
 }
 
 export async function extractTextFromPdf(source: PdfSource): Promise<string> {
+  const pdfjsLib = await getPdfjsLib()
   const src = source instanceof File ? { data: await source.arrayBuffer() } : getDocumentSource(source)
   const doc = await pdfjsLib.getDocument(src).promise
   const numPages = doc.numPages

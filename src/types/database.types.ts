@@ -54,6 +54,7 @@ export interface Scene {
   day_night: DayNight
   location_id: string | null
   set_id: string | null
+  set_name: string | null
   synopsis: string | null
   page_eighths: number
   has_stunts: boolean

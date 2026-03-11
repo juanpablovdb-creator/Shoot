@@ -13,10 +13,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { ImportScriptDialog } from './ImportScriptDialog'
 import { FileText, Upload, Loader2, FileUp } from 'lucide-react'
-import { getPdfPageCount, extractTextFromPdf } from '@/lib/pdf-utils'
+import {
+  createScenesFromParsed,
+  deleteAllProjectScenes,
+  type ParsedScene,
+} from '@/lib/breakdown-import'
 
 const BUCKET = 'project-scripts'
-const SCRIPT_PATH = (projectId: string) => `${projectId}/script.pdf`
 
 export function ScriptSection({
   projectId,
@@ -40,19 +43,11 @@ export function ScriptSection({
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [extractedText, setExtractedText] = useState('')
   const [extracting, setExtracting] = useState(false)
+  const [importSuccess, setImportSuccess] = useState<string | null>(null)
+  const [rehacerLoading, setRehacerLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const hasPdf = Boolean(initialScriptFilePath)
-
-  // Al entrar al desglose con 0 escenas y guion en DB, abrir el diálogo para que solo tenga que dar "Importar"
-  useEffect(() => {
-    if (initialScenesCount > 0) return
-    if (initialScriptContent?.trim()) {
-      setExtractedText(initialScriptContent)
-      setImportDialogOpen(true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
-  }, [])
 
   const refreshSignedUrl = useCallback(async () => {
     if (!initialScriptFilePath) return
@@ -68,13 +63,15 @@ export function ScriptSection({
     refreshSignedUrl()
   }, [hasPdf, refreshSignedUrl])
 
+  // Conteo de páginas desde el servidor (sin pdfjs-dist en cliente)
   useEffect(() => {
-    if (!signedUrl || !hasPdf) return
+    if (!hasPdf || !projectId) return
     let cancelled = false
     setLoadingPageCount(true)
-    getPdfPageCount(signedUrl)
-      .then((n) => {
-        if (!cancelled) setPageCount(n)
+    fetch(`/api/projects/${projectId}/script-info`)
+      .then((res) => res.json())
+      .then((data: { pageCount?: number }) => {
+        if (!cancelled && typeof data.pageCount === 'number') setPageCount(data.pageCount)
       })
       .finally(() => {
         if (!cancelled) setLoadingPageCount(false)
@@ -82,7 +79,7 @@ export function ScriptSection({
     return () => {
       cancelled = true
     }
-  }, [signedUrl, hasPdf])
+  }, [hasPdf, projectId])
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -112,25 +109,127 @@ export function ScriptSection({
   }
 
   async function handleImportFromPdf() {
-    if (initialScriptContent?.trim()) {
-      setExtractedText(initialScriptContent)
-      setImportDialogOpen(true)
-      return
-    }
-    if (!signedUrl) {
-      setUploadError('No se pudo cargar el PDF. Recarga la página o sube el PDF de nuevo.')
+    let text = initialScriptContent?.trim() ?? ''
+    if (!text && !hasPdf) {
+      setUploadError('No hay PDF subido ni texto. Sube el guion o usa "Importar guion" para pegar texto.')
       return
     }
     setExtracting(true)
     setUploadError(null)
+    setImportSuccess(null)
     try {
-      const text = await extractTextFromPdf(signedUrl)
-      setExtractedText(text)
-      setImportDialogOpen(true)
+      if (!text && hasPdf) {
+        const res = await fetch(`/api/projects/${projectId}/extract-script`)
+        const data = (await res.json()) as {
+          text?: string
+          error?: string
+          details?: string
+        }
+        if (!res.ok) {
+          const msg = data.error ?? 'No se pudo extraer texto del PDF.'
+          const detail = data.details ? ` (${data.details})` : ''
+          setUploadError(msg + detail)
+          return
+        }
+        text = data.text?.trim() ?? ''
+        if (!text) {
+          setUploadError('El PDF no contiene texto extraíble.')
+          return
+        }
+      }
+      const parseRes = await fetch('/api/parse-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId }),
+      })
+      const parseData = (await parseRes.json()) as {
+        scenes?: ParsedScene[]
+        error?: string
+        details?: string
+      }
+      if (!parseRes.ok) {
+        setUploadError(
+          parseData.error ?? 'Error al parsear el guion'
+            + (parseData.details ? ` (${parseData.details})` : '')
+        )
+        return
+      }
+      const scenes = parseData.scenes ?? []
+      if (scenes.length === 0) {
+        setUploadError('No se detectaron escenas en el texto.')
+        return
+      }
+      const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
+        saveScriptContent: text,
+      })
+      router.refresh()
+      if (inserted > 0) {
+        setImportSuccess(
+          `Se importaron ${inserted} escena${inserted !== 1 ? 's' : ''}.`
+        )
+        setTimeout(() => setImportSuccess(null), 4000)
+      } else if (skipped > 0) {
+        setImportSuccess(
+          `${skipped} escena${skipped !== 1 ? 's' : ''} ya existían en el desglose. No se duplicaron.`
+        )
+        setTimeout(() => setImportSuccess(null), 4000)
+      } else {
+        setUploadError('No se pudieron crear escenas en la base de datos.')
+      }
     } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'No se pudo extraer texto del PDF.')
+      setUploadError(e instanceof Error ? e.message : 'Error al importar escenas.')
     } finally {
       setExtracting(false)
+    }
+  }
+
+  async function handleRehacerDesglose() {
+    let text = initialScriptContent?.trim() ?? ''
+    setRehacerLoading(true)
+    setUploadError(null)
+    setImportSuccess(null)
+    try {
+      if (hasPdf && !text) {
+        const res = await fetch(`/api/projects/${projectId}/extract-script`)
+        const data = (await res.json()) as { text?: string; error?: string; details?: string }
+        if (!res.ok) {
+          setUploadError(data.error ?? 'No se pudo extraer el PDF.' + (data.details ? ` (${data.details})` : ''))
+          return
+        }
+        text = data.text?.trim() ?? ''
+      }
+      if (!text) {
+        setUploadError('No hay texto del guion. Sube el PDF y vuelve a intentar.')
+        return
+      }
+      const parseRes = await fetch('/api/parse-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId }),
+      })
+      const parseData = (await parseRes.json()) as { scenes?: ParsedScene[]; error?: string; details?: string }
+      if (!parseRes.ok) {
+        setUploadError(parseData.error ?? 'Error al analizar el guion' + (parseData.details ? ` (${parseData.details})` : ''))
+        return
+      }
+      const scenes = parseData.scenes ?? []
+      if (scenes.length === 0) {
+        setUploadError('No se detectaron escenas en el texto.')
+        return
+      }
+      await deleteAllProjectScenes(projectId)
+      const { inserted } = await createScenesFromParsed(projectId, scenes, {
+        saveScriptContent: text,
+      })
+      router.refresh()
+      setImportSuccess(
+        `Desglose rehecho: ${inserted} escena${inserted !== 1 ? 's' : ''} con cast, SFX, VFX y stunts.`
+      )
+      setTimeout(() => setImportSuccess(null), 5000)
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Error al rehacer el desglose.')
+    } finally {
+      setRehacerLoading(false)
     }
   }
 
@@ -215,19 +314,43 @@ export function ScriptSection({
                   type="button"
                   size="sm"
                   onClick={handleImportFromPdf}
-                  disabled={loadingPageCount || extracting}
+                  disabled={loadingPageCount || extracting || rehacerLoading}
                 >
                   {extracting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />
-                      Extrayendo texto...
+                      Importando escenas...
                     </>
                   ) : (
                     'Importar escenas desde este guion'
                   )}
                 </Button>
+                {initialScenesCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRehacerDesglose}
+                    disabled={loadingPageCount || extracting || rehacerLoading}
+                  >
+                    {rehacerLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Rehaciendo desglose...
+                      </>
+                    ) : (
+                      'Rehacer desglose con IA'
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
+            {importSuccess && (
+              <p className="text-sm text-green-600">{importSuccess}</p>
+            )}
+            {uploadError && (
+              <p className="text-sm text-destructive">{uploadError}</p>
+            )}
             {signedUrl && (
               <div className="rounded-lg border border-border bg-muted/10 overflow-hidden">
                 <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
