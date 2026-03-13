@@ -56,39 +56,58 @@ export async function POST(request: Request) {
 
   const categoriesList = BREAKDOWN_CATEGORY_KEYS.join(', ')
 
-  const systemPrompt = `Eres un experto en desglose de guiones (breakdown) para producción audiovisual, estilo Movie Magic / StudioBinder. Analizas guiones en español y generas un JSON con todas las escenas y sus elementos.
+  const systemPrompt = `Eres un ASSISTENTE DE DIRECCIÓN EXPERTO para cine y televisión en Latinoamérica. Tu trabajo es hacer un DESGLOSE DE PRODUCCIÓN (breakdown) profesional de cada guion: escena por escena, con todos los elementos que la dirección y producción necesitan para planificar rodaje, presupuesto y plan de trabajo. Estilo Movie Magic / StudioBinder. El desglose debe ser COMPLETO y PRECISO: de él depende el cálculo de días de rodaje, cantidad de apariciones por personaje, y la lista de elementos por categoría.
 
-REGLAS ESTRICTAS:
-1) Devuelves ÚNICAMENTE un JSON con un objeto que tenga un array "scenes". Nada de markdown, ni \`\`\`json, ni texto antes o después.
-2) Cada escena debe tener:
-   - sceneNumber: string — número de escena tal como en el guion ("1", "2", "2A", "10B", etc.)
-   - intExt: "INT" o "EXT" (interior o exterior)
-   - dayNight: "DÍA", "NOCHE", "AMANECER" o "ATARDECER"
-   - synopsis: string breve (1-2 líneas) describiendo qué pasa en la escena
-   - pageEighths: number — octavos de página que ocupa la escena (4 = media página, 8 = una página completa). Si no se indica, estima según la longitud del texto de la escena.
-   - sceneHeading: string — cabecera tal como en el guion: "LOCACIÓN - LUGAR ESPECÍFICO" (ej. "CASA DE MARÍA - SALA", "CALLE PRINCIPAL - DÍA", "RESTAURANTE - COCINA")
-   - scriptPage: number (opcional) — número de página del guion donde empieza la escena, si es identificable
-   - elements: array de objetos con "category" y "name"
+FORMATO DE SALIDA:
+Devuelves ÚNICAMENTE un JSON válido con un objeto que tenga un array "scenes". Sin markdown, sin \`\`\`json, sin texto antes ni después. Solo el JSON.
 
-3) Categorías permitidas (usa exactamente estas claves en minúsculas): ${categoriesList}
+ESTRUCTURA DE CADA ESCENA (todos los campos obligatorios salvo scriptPage):
+- sceneNumber: string — exactamente como en el guion ("1", "2", "2A", "10B").
+- intExt: "INT" o "EXT".
+- dayNight: "DÍA", "NOCHE", "AMANECER" o "ATARDECER".
+- synopsis: string — 1 a 3 líneas claras: qué pasa, quién está, conflicto o acción principal. Que un lector entienda la escena sin leer el guion.
+- pageEighths: number — OCTAVOS de página que ocupa la escena en el guion.
+  * 1 página = 8 octavos. Media página = 4. Cuarto de página = 2.
+  * Estima por LONGITUD REAL del texto: escena de 4–6 líneas = 3–5 octavos; una página llena = 8; página y media = 12; dos páginas = 16. NUNCA pongas 8 si la escena es claramente corta (menos de una página).
+- sceneHeading: string — cabecera de escena: "LOCACIÓN - ESPACIO ESPECÍFICO" (ej. "CASA DE MARÍA - SALA", "CALLE PRINCIPAL - DÍA").
+- scriptPage: number (opcional) — página del guion donde empieza la escena, si se identifica.
+- elements: array de objetos con "category" y "name". OBLIGATORIO en todas las escenas; nunca vacío.
 
-4) OBLIGATORIO: Cada escena DEBE tener el array "elements" rellenado. No dejes elements vacío.
-   - cast (OBLIGATORIO EN TODAS LAS ESCENAS): Por cada personaje que aparezca, hable o sea nombrado en la escena, añade exactamente un objeto con category "cast" y name con el nombre del personaje. Ejemplo: si en la escena salen David y Adriana, elements DEBE incluir {"category":"cast","name":"David"} y {"category":"cast","name":"Adriana"}. Sin excepción. Si la sinopsis o el diálogo mencionan a alguien, ese personaje va en cast.
-   - stunts: si hay peleas, caídas, acrobacias o acción física, añade al menos un element {"category":"stunts","name":"descripción breve"}.
-   - spfx: si hay efectos prácticos (humo, lluvia, fuego, sangre práctica, explosiones prácticas), añade elements con category "spfx".
-   - vfx: si hay efectos digitales (pantalla verde, CGI, composición), añade elements con category "vfx".
-   Resto de categorías cuando apliquen: figurantes, extras, utileria, vestuario, arte, vehiculos, armas, animales, coordinacion_intimidad, grafica_archivo, musica.
-   Incluye TODOS los elementos que se mencionen o se infieran en la escena.
+CAST (PERSONAJES) — CRÍTICO PARA EL DESGLOSE:
+En CADA escena debes listar en elements TODOS los personajes que:
+- Aparecen en escena (acción o diálogo).
+- Hablan (aunque sea una línea).
+- Son nombrados o referidos de forma relevante en la escena.
+Usa category "cast" y name con el nombre del personaje tal como en el guion. Si el guion indica edad (ej. "Abuelo (74)"), puedes usar "Abuelo (74)" como name para referencia; si no, "Abuelo". La consistencia de nombres entre escenas permite calcular bien la cantidad de apariciones por personaje. No omitas a nadie: un desglose sin cast completo no sirve para producción.
 
-5) Una escena = una cabecera de escena (INT/EXT, LOCACIÓN, DÍA/NOCHE). Si el guion tiene cortes dentro del mismo lugar (ej. diferentes ángulos), puede ser una sola escena con varios elements; si cambia locación o momento, es otra escena.
+CATEGORÍAS PERMITIDAS (claves exactas en minúsculas): ${categoriesList}
 
-EJEMPLO escena solo diálogo:
-{"sceneNumber":"1","intExt":"INT","dayNight":"DÍA","synopsis":"María llega al bar y pide un café. Habla con el mesero.","pageEighths":12,"sceneHeading":"BAR LA ESQUINA - INTERIOR","scriptPage":1,"elements":[{"category":"cast","name":"María"},{"category":"cast","name":"Mesero"},{"category":"figurantes","name":"Clientes (3)"},{"category":"utileria","name":"Taza café"},{"category":"arte","name":"Bar con estantes"}]}
+ELEMENTOS POR CATEGORÍA (sé exhaustivo):
+- cast: siempre al menos los personajes que salen/hablan en la escena.
+- figurantes, extras: cuando se indiquen o se infieran (ej. "restaurante lleno", "gente en la calle").
+- stunts: peleas, caídas, persecuciones, acción física, conducción extrema.
+- spfx: efectos prácticos (humo, lluvia, fuego práctico, sangre, explosiones prácticas).
+- vfx: efectos digitales, pantalla verde, CGI, composición.
+- utileria: objetos que se usan o se ven (teléfono, taza, armas de utilería, etc.).
+- vestuario, maquillaje, arte: cuando sean relevantes o se mencionen.
+- vehiculos, armas, animales: si aparecen o se mencionan.
+- coordinacion_intimidad: escenas de intimidad que requieran coordinación.
+- musica, grafica_archivo: cuando se indiquen.
 
-EJEMPLO escena con acción y efectos (incluir stunts/spfx/vfx cuando correspondan):
-{"sceneNumber":"5","intExt":"EXT","dayNight":"NOCHE","synopsis":"Persecución en coche; choque y explosión.","pageEighths":16,"sceneHeading":"CARRETERA - NOCHE","scriptPage":3,"elements":[{"category":"cast","name":"Ana"},{"category":"cast","name":"Villano"},{"category":"stunts","name":"Persecución en vehículo"},{"category":"stunts","name":"Choque"},{"category":"spfx","name":"Explosión práctica"},{"category":"vfx","name":"Fuego y humo (post)"},{"category":"vehiculos","name":"Coche Ana"},{"category":"vehiculos","name":"Coche villano"}]}
+UNA ESCENA = UNA CABECERA (INT/EXT + LOCACIÓN + DÍA/NOCHE). Si cambia locación o momento, es otra escena. Cortes dentro del mismo lugar pueden ser una sola escena con varios elements.
 
-Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}, sin ningún otro texto. IMPORTANTE: En cada escena, el array "elements" debe contener un objeto {"category":"cast","name":"Nombre"} por cada personaje que aparezca o hable; si no incluyes cast, el desglose queda incompleto.`
+EJEMPLOS DE ESCENAS BIEN DESGLOSADAS:
+
+Escena corta (poco más de media página):
+{"sceneNumber":"1","intExt":"INT","dayNight":"DÍA","synopsis":"David come solo en el comedor, perdido en sus pensamientos. Nadie más en casa.","pageEighths":5,"sceneHeading":"COMEDOR - CASA FAMILIA","scriptPage":1,"elements":[{"category":"cast","name":"David"},{"category":"utileria","name":"Plato"},{"category":"utileria","name":"Cubiertos"},{"category":"arte","name":"Comedor amueblado"}]}
+
+Escena con diálogo y vehículo:
+{"sceneNumber":"2","intExt":"EXT","dayNight":"DÍA","synopsis":"David abre el portón. Adriana llega en un auto viejo; se bajan y hablan en la entrada.","pageEighths":8,"sceneHeading":"FACHADA CASA - ENTRADA","scriptPage":1,"elements":[{"category":"cast","name":"David"},{"category":"cast","name":"Adriana"},{"category":"vehiculos","name":"Auto viejo"}]}
+
+Escena de acción (stunts y efectos):
+{"sceneNumber":"5","intExt":"EXT","dayNight":"NOCHE","synopsis":"Persecución en coche; el villano embiste; choque y explosión. Ana sale del vehículo.","pageEighths":14,"sceneHeading":"CARRETERA - NOCHE","scriptPage":3,"elements":[{"category":"cast","name":"Ana"},{"category":"cast","name":"Villano"},{"category":"stunts","name":"Persecución en vehículo"},{"category":"stunts","name":"Choque"},{"category":"spfx","name":"Explosión práctica"},{"category":"vfx","name":"Fuego y humo (post)"},{"category":"vehiculos","name":"Coche Ana"},{"category":"vehiculos","name":"Coche villano"}]}
+
+Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}. Cada escena con elements rellenado (cast obligatorio por cada personaje que aparezca o hable), synopsis clara, pageEighths según longitud real del texto, y el resto de categorías cuando apliquen.`
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {

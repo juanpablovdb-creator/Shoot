@@ -2,6 +2,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
+import { getCastFromBreakdown } from '@/lib/sync-cast'
 import type { BreakdownCategoryKey } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +40,11 @@ export default async function ElementsPage({
     {}
   )
 
+  const castByAppearance =
+    'Cast' in byCategory
+      ? await getCastFromBreakdown(supabase, projectId)
+      : []
+
   return (
     <>
       <PageHeader
@@ -60,9 +66,15 @@ export default async function ElementsPage({
               >
                 <h3 className="text-sm font-semibold text-foreground">{label}</h3>
                 <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  {items.map((name) => (
-                    <li key={name}>{name}</li>
-                  ))}
+                  {label === 'Cast' && castByAppearance.length > 0
+                    ? castByAppearance.map((c) => (
+                        <li key={c.id}>
+                          {c.cast_number}. {c.character_name}
+                        </li>
+                      ))
+                    : items.map((name) => (
+                        <li key={name}>{name}</li>
+                      ))}
                 </ul>
               </div>
             ))}

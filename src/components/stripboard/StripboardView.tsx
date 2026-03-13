@@ -10,9 +10,11 @@ export type StripSortBy = 'scene' | 'set'
 interface StripboardViewProps {
   strips: StripRowData[]
   projectId: string
+  /** Páginas totales del guion; la suma de octavos debe ser exactamente scriptTotalPages × 8. */
+  scriptTotalPages?: number
 }
 
-export function StripboardView({ strips, projectId }: StripboardViewProps) {
+export function StripboardView({ strips, projectId, scriptTotalPages }: StripboardViewProps) {
   const [sortBy, setSortBy] = useState<StripSortBy>('scene')
   const [asc, setAsc] = useState(true)
 
@@ -35,7 +37,10 @@ export function StripboardView({ strips, projectId }: StripboardViewProps) {
   }, [strips, sortBy, asc])
 
   const totalEighths = strips.reduce((s, t) => s + t.page_eighths, 0)
-  const totalPages = (totalEighths / 8).toFixed(1)
+  const totalPagesFromEighths = totalEighths / 8
+  const totalPages = totalPagesFromEighths.toFixed(1)
+  const matchesScript =
+    scriptTotalPages != null && Math.abs(totalPagesFromEighths - scriptTotalPages) < 0.01
 
   return (
     <div className="space-y-4">
@@ -89,36 +94,39 @@ export function StripboardView({ strips, projectId }: StripboardViewProps) {
         </div>
         <div className="text-sm text-muted-foreground">
           {strips.length} escenas · {totalPages} páginas
+          {scriptTotalPages != null && (
+            <span className="ml-1">
+              (guion: {scriptTotalPages} hoja{scriptTotalPages !== 1 ? 's' : ''}
+              {matchesScript ? ' ✓' : ''})
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Tabla de franjas — cabecera con buen contraste */}
-      <div className="overflow-auto rounded-xl border border-border bg-card">
-        <div role="table" className="min-w-[640px]">
+      {/* Tabla de franjas — ancho completo; líneas de arriba a abajo */}
+      <div className="w-full overflow-auto rounded-xl border border-gray-800 bg-card">
+        <div role="table" className="w-full min-w-[640px]">
           <div
-            className="flex min-h-[44px] items-center border-b-2 border-border bg-muted text-xs font-semibold uppercase tracking-wider text-foreground"
+            className="flex min-h-[44px] items-center border-b-2 border-gray-800 bg-muted text-xs font-semibold uppercase tracking-wider text-foreground"
             role="row"
           >
-            <div className="w-2 shrink-0" />
-            <div className="w-[108px] shrink-0 border-r border-border/60 px-2.5 py-2.5">
+            <div className="w-2 shrink-0 border-r border-gray-800" />
+            <div className="w-[52px] shrink-0 border-r border-gray-800 px-1.5 py-2 text-center">
               Escena
             </div>
-            <div className="min-w-[280px] flex-1 border-r border-border/60 px-3 py-2.5">
-              Set / Locación · Sinopsis
+            <div className="min-w-[200px] flex-1 border-r border-gray-800 px-2 py-2" style={{ minWidth: 0 }}>
+              INT/EXT · Título · Descripción
             </div>
-            <div className="w-[88px] shrink-0 border-r border-border/60 px-2 py-2.5 text-center">
+            <div className="w-[100px] shrink-0 border-r border-gray-800 px-2 py-2">
+              Locación esp.
+            </div>
+            <div className="w-[100px] shrink-0 border-r border-gray-800 px-2 py-2 text-center">
               Cast
             </div>
-            <div className="w-[40px] shrink-0 border-r border-border/60 py-2.5 text-center">
-              SFX
+            <div className="w-[72px] shrink-0 border-r border-gray-800 px-2 py-2 text-center">
+              Stunts
             </div>
-            <div className="w-[40px] shrink-0 border-r border-border/60 py-2.5 text-center">
-              VFX
-            </div>
-            <div className="w-[40px] shrink-0 border-r border-border/60 py-2.5 text-center">
-              STU
-            </div>
-            <div className="w-[52px] shrink-0 px-2 py-2.5 text-center">
+            <div className="w-[52px] shrink-0 border-r border-gray-800 px-2 py-2 text-right">
               Págs
             </div>
           </div>

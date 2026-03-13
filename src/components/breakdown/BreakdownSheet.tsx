@@ -30,7 +30,9 @@ interface SceneRow {
         locations?: { name: string } | Array<{ name: string }> | null
       }>
     | null
-  scene_cast?: Array<{ cast_members: { cast_number: number } | null }>
+  scene_cast?: Array<{
+    cast_members: { cast_number: number; character_name: string | null } | null
+  }>
   scene_elements?: Array<{
     breakdown_elements: { name: string; category: string } | null
   }>
@@ -43,6 +45,8 @@ export interface BreakdownSheetProps {
   initialScriptFilePath?: string | null
   initialScriptFileName?: string | null
   initialScenes: SceneRow[]
+  /** Nombre base (lowercase) → cantidad de apariciones (para mostrar en cada escena). */
+  castAppearanceCountsByName?: Record<string, number>
 }
 
 export function BreakdownSheet({
@@ -52,6 +56,7 @@ export function BreakdownSheet({
   initialScriptFilePath = null,
   initialScriptFileName = null,
   initialScenes,
+  castAppearanceCountsByName,
 }: BreakdownSheetProps) {
   const castNumbers = (row: SceneRow) =>
     (row.scene_cast ?? [])
@@ -162,7 +167,14 @@ export function BreakdownSheet({
               hasStunts={scene.has_stunts}
               hasSfx={scene.has_sfx}
               hasVfx={scene.has_vfx}
-              castNumbers={castNumbers(scene)}
+              castEntries={(scene.scene_cast ?? [])
+                .map((c) => c.cast_members)
+                .filter((m): m is { cast_number: number; character_name: string | null } => m != null)
+                .map((m) => ({
+                  cast_number: m.cast_number,
+                  character_name: (m.character_name ?? '').trim(),
+                }))}
+              castAppearanceCountsByName={castAppearanceCountsByName}
               stuntNumbers={stuntNumbers(scene)}
               elements={
                 scene.scene_elements?.map((e) => ({

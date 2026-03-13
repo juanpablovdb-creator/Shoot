@@ -39,6 +39,7 @@ export interface Project {
   script_content: string | null
   script_file_path: string | null
   script_file_name: string | null
+  script_total_pages: number | null
   created_at: string
   updated_at: string
   user_id: string

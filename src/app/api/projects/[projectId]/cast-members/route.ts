@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getCastFromBreakdown } from '@/lib/sync-cast'
 
 /**
  * GET /api/projects/[projectId]/cast-members
- * Devuelve el elenco del proyecto (para que la pestaña Elenco siempre pueda cargarlo).
+ * Devuelve el cast desde la misma fuente que Elementos (breakdown_elements categoría "cast").
  */
 export async function GET(
   _request: Request,
@@ -33,17 +34,16 @@ export async function GET(
       return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
     }
 
-    const { data: castMembers } = await supabase
-      .from('cast_members')
-      .select('id, character_name, cast_number, actor_name, availability_notes')
-      .eq('project_id', projectId)
-      .order('cast_number', { ascending: true })
+    const castMembers = await getCastFromBreakdown(supabase, projectId)
 
-    return NextResponse.json({ castMembers: castMembers ?? [] })
+    return NextResponse.json(
+      { castMembers },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     return NextResponse.json(
-      { error: 'Error al cargar elenco', details: message },
+      { error: 'Error al cargar cast', details: message },
       { status: 500 }
     )
   }

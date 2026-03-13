@@ -23,7 +23,12 @@ interface SceneCardProps {
   hasStunts: boolean
   hasSfx: boolean
   hasVfx: boolean
+  /** @deprecated Use castEntries + castAppearanceCountsByName */
   castNumbers?: number[]
+  /** Cast en la escena (número y nombre) para mostrar con cantidad de apariciones. */
+  castEntries?: { cast_number: number; character_name: string }[]
+  /** Nombre base (lowercase) → cantidad de apariciones. */
+  castAppearanceCountsByName?: Record<string, number>
   stuntNumbers?: number[]
   elements?: SceneElementItem[]
   isSelected?: boolean
@@ -54,6 +59,8 @@ export function SceneCard({
   hasSfx,
   hasVfx,
   castNumbers = [],
+  castEntries,
+  castAppearanceCountsByName,
   stuntNumbers = [],
   elements = [],
   isSelected,
@@ -62,6 +69,8 @@ export function SceneCard({
   const colorKey = getStripColor(intExt, dayNight)
   const stripStyle = STRIP_COLORS[colorKey]
   const elementsByCategory = groupElementsByCategory(elements)
+  const castList = castEntries ?? castNumbers.map((n) => ({ cast_number: n, character_name: '' }))
+  const hasCast = castList.length > 0
 
   return (
     <button
@@ -113,11 +122,26 @@ export function SceneCard({
           )}
 
           {/* Cast / Stunts */}
-          {(castNumbers.length > 0 || stuntNumbers.length > 0) && (
+          {(hasCast || stuntNumbers.length > 0) && (
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              {castNumbers.length > 0 && (
+              {hasCast && (
                 <span className="rounded-md bg-muted px-2 py-0.5">
-                  Cast: {castNumbers.join(', ')}
+                  Cast:{' '}
+                  {castList
+                    .map(({ cast_number, character_name }) => {
+                      const base = character_name.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase()
+                      const count =
+                        castAppearanceCountsByName && base
+                          ? castAppearanceCountsByName[base]
+                          : undefined
+                      const label = character_name ? ` ${character_name}` : ''
+                      return count != null
+                        ? `${cast_number}${label} (${count} apar.)`
+                        : label
+                          ? `${cast_number}${label}`
+                          : String(cast_number)
+                    })
+                    .join(', ')}
                 </span>
               )}
               {stuntNumbers.length > 0 && (

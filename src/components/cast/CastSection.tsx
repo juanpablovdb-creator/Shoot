@@ -1,9 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 type CastMember = {
   id: string
@@ -11,6 +8,7 @@ type CastMember = {
   cast_number: number
   actor_name: string | null
   availability_notes: string | null
+  appearance_count?: number
 }
 
 export function CastSection({
@@ -20,117 +18,47 @@ export function CastSection({
   projectId: string
   initialCastMembers: CastMember[]
 }) {
-  const router = useRouter()
   const [castMembers, setCastMembers] = useState<CastMember[]>(initialCastMembers ?? [])
-  const [loading, setLoading] = useState(false)
   const [loadingList, setLoadingList] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const hasLoadedCastRef = useRef(false)
 
+  // Refrescar cast desde la API al montar (sin cache); un reintento si llega vacío (p. ej. tras desglose)
   useEffect(() => {
-    if (initialCastMembers.length > 0) {
-      hasLoadedCastRef.current = true
-      setCastMembers(initialCastMembers)
-      return
-    }
-    // Si ya tenemos elenco en estado (p. ej. tras sincronizar), no mostrar "Cargando..." para no ocultar la tabla
-    if (hasLoadedCastRef.current) {
-      setLoadingList(false)
-      return
-    }
     let cancelled = false
-    setLoadingList(true)
-    fetch(`/api/projects/${projectId}/cast-members`)
-      .then((res) => res.json())
-      .then((data: { castMembers?: CastMember[] }) => {
-        if (!cancelled && Array.isArray(data.castMembers)) {
-          hasLoadedCastRef.current = true
-          setCastMembers(data.castMembers)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingList(false)
-      })
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    if (initialCastMembers.length > 0) {
+      setCastMembers(initialCastMembers)
+    } else {
+      setLoadingList(true)
+    }
+    const load = (isRetry = false) => {
+      fetch(`/api/projects/${projectId}/cast-members`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data: { castMembers?: CastMember[] }) => {
+          if (cancelled) return
+          if (!Array.isArray(data.castMembers)) return
+          const list = data.castMembers
+          setCastMembers((prev) => (list.length > 0 ? list : prev.length > 0 ? prev : list))
+          if (list.length === 0 && !isRetry) {
+            retryTimer = setTimeout(() => {
+              if (!cancelled) load(true)
+            }, 800)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingList(false)
+        })
+    }
+    load()
     return () => {
       cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
     }
-  }, [projectId, initialCastMembers])
-
-  async function handleSync() {
-    setLoading(true)
-    setError(null)
-    setMessage(null)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/sync-cast`, {
-        method: 'POST',
-      })
-      const data = (await res.json()) as {
-        ok?: boolean
-        message?: string
-        error?: string
-        details?: string
-        castMembers?: CastMember[]
-      }
-      if (!res.ok) {
-        setError(data.error ?? data.details ?? 'Error al sincronizar')
-        return
-      }
-      setMessage(data.message ?? 'Elenco sincronizado.')
-      if (Array.isArray(data.castMembers)) {
-        hasLoadedCastRef.current = true
-        setCastMembers(data.castMembers)
-      }
-      router.refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error de conexión')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const hasCast = castMembers.length > 0
+  }, [projectId])
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="flex flex-col gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={handleSync}
-          disabled={loading}
-        >
-          {loading ? (
-            <>Sincronizando...</>
-          ) : (
-            <>
-              <RefreshCw className="size-4" />
-              Sincronizar elenco desde desglose
-            </>
-          )}
-        </Button>
-        {message && (
-          <p className="text-sm text-green-600 dark:text-green-400">{message}</p>
-        )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
       {loadingList ? (
-        <p className="text-sm text-muted-foreground">Cargando elenco...</p>
-      ) : !hasCast ? (
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            No hay personajes en el elenco. Si ya importaste el guion y tienes
-            escenas en el Desglose, pulsa &quot;Sincronizar elenco desde
-            desglose&quot; para generar el elenco desde los personajes (Cast) del
-            desglose.
-          </p>
-          <p>
-            Si el desglose tampoco tiene cast, ve a Desglose y usa &quot;Rehacer
-            desglose con IA&quot; para que la IA vuelva a analizar el guion y
-            rellene los personajes por escena.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">Cargando cast...</p>
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <table className="w-full text-sm">
@@ -142,28 +70,45 @@ export function CastSection({
                 <th className="px-4 py-3 text-left font-medium text-foreground">
                   Personaje
                 </th>
+                <th className="px-4 py-3 text-right font-medium text-foreground tabular-nums">
+                  Cantidad de apariciones
+                </th>
                 <th className="px-4 py-3 text-left font-medium text-foreground">
                   Actor / Notas
                 </th>
               </tr>
             </thead>
             <tbody>
-              {castMembers.map((c) => (
-                <tr
-                  key={c.id}
-                  className="border-b border-border/80 transition-colors hover:bg-muted/30"
-                >
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                    {c.cast_number}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    {c.character_name}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {c.actor_name ?? c.availability_notes ?? '—'}
+              {castMembers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                  >
+                    No hay personajes. El cast se genera desde el desglose al importar el guion o usar &quot;Rehacer desglose con IA&quot; en Desglose.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                castMembers.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b border-border/80 transition-colors hover:bg-muted/30"
+                  >
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                      {c.cast_number}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-foreground">
+                      {c.character_name}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                      {c.appearance_count ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {c.actor_name ?? c.availability_notes ?? '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

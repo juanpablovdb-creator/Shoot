@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractTextFromPdfBuffer } from '@/lib/pdf/extract-text'
+import {
+  extractTextFromPdfBuffer,
+  getPdfPageCountFromBuffer,
+} from '@/lib/pdf/extract-text'
 
 /**
  * POST /api/extract-pdf
@@ -33,8 +36,11 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const text = await extractTextFromPdfBuffer(buffer)
-    return NextResponse.json({ text })
+    const [text, totalPages] = await Promise.all([
+      extractTextFromPdfBuffer(buffer),
+      getPdfPageCountFromBuffer(buffer),
+    ])
+    return NextResponse.json({ text, totalPages })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     return NextResponse.json(

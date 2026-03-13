@@ -22,7 +22,7 @@ export default function DashboardPage() {
       <div className="mt-10">
         <p className="max-w-xl text-muted-foreground">
           Crea un proyecto para comenzar el desglose de escenas, gestión de
-          elenco y locaciones, y el stripboard.
+          cast y locaciones, y el stripboard.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link

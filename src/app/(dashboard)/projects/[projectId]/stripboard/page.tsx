@@ -15,16 +15,17 @@ export default async function StripboardPage({
   const supabase = await createClient()
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('id, name')
+    .select('id, name, script_total_pages')
     .eq('id', projectId)
     .single()
 
   if (projectError || !project) notFound()
 
-  const { data: scenes } = await supabase
-    .from('scenes')
-    .select(
-      `
+  const [{ data: scenes }, { data: castMembers }] = await Promise.all([
+    supabase
+      .from('scenes')
+      .select(
+        `
       id,
       scene_number,
       scene_number_sort,
@@ -40,9 +41,22 @@ export default async function StripboardPage({
       scene_cast ( cast_members ( id, character_name, cast_number ) ),
       scene_elements ( breakdown_elements ( id, name, category ) )
     `
-    )
-    .eq('project_id', projectId)
-    .order('scene_number_sort', { ascending: true })
+      )
+      .eq('project_id', projectId)
+      .order('scene_number_sort', { ascending: true }),
+    supabase
+      .from('cast_members')
+      .select('id, character_name, cast_number')
+      .eq('project_id', projectId),
+  ])
+
+  const nameToCastNumber = new Map<string, number>()
+  for (const cm of castMembers ?? []) {
+    const name = (cm.character_name ?? '').trim()
+    if (name && cm.cast_number != null) {
+      nameToCastNumber.set(name.toLowerCase(), cm.cast_number)
+    }
+  }
 
   const strips: StripRowData[] = (scenes ?? []).map((scene) => {
     const setsRow = scene.sets as { name?: string; locations?: { name?: string } } | null
@@ -50,9 +64,20 @@ export default async function StripboardPage({
       setsRow && typeof setsRow === 'object' && 'name' in setsRow
         ? setsRow.name
         : undefined
-    const castNumbers = (scene.scene_cast ?? [])
+    const locations = setsRow && typeof setsRow === 'object' && 'locations' in setsRow ? setsRow.locations : undefined
+    const specificLocation =
+      locations && typeof locations === 'object' && locations !== null && 'name' in locations
+        ? (locations as { name?: string }).name
+        : Array.isArray(locations) && locations[0] && typeof locations[0] === 'object' && 'name' in locations[0]
+          ? (locations[0] as { name?: string }).name
+          : null
+
+    const allCastNumbers = (scene.scene_cast ?? [])
       .map((c: { cast_members?: { cast_number?: number } }) => c.cast_members?.cast_number)
       .filter((n): n is number => n != null)
+    let castNumbers = allCastNumbers.filter((n) => n < 100)
+    const stuntNumbers = allCastNumbers.filter((n) => n >= 100)
+
     const sceneElsRaw = scene.scene_elements ?? []
     const sceneEls = Array.isArray(sceneElsRaw) ? sceneElsRaw : []
     const getBe = (se: Record<string, unknown>) =>
@@ -63,6 +88,13 @@ export default async function StripboardPage({
       .map((be) => be.name)
     const castNames = castFromElements.length > 0 ? castFromElements : undefined
 
+    if (castNumbers.length === 0 && castFromElements.length > 0) {
+      const seen = new Set<number>()
+      castNumbers = castFromElements
+        .map((name) => nameToCastNumber.get(name.trim().toLowerCase()))
+        .filter((n): n is number => n != null && n < 100 && !seen.has(n) && (seen.add(n), true))
+    }
+
     return {
       id: scene.id,
       scene_number: scene.scene_number,
@@ -71,12 +103,14 @@ export default async function StripboardPage({
       day_night: scene.day_night,
       set_name: scene.set_name ?? setLocationName ?? null,
       setLocationName: setLocationName ?? undefined,
+      specificLocation: specificLocation ?? null,
       synopsis: scene.synopsis ?? null,
       page_eighths: scene.page_eighths,
       has_stunts: scene.has_stunts,
       has_sfx: scene.has_sfx,
       has_vfx: scene.has_vfx,
       castNumbers,
+      stuntNumbers,
       castNames,
     }
   })
@@ -88,7 +122,11 @@ export default async function StripboardPage({
         description="Franjas por escena (INT/EXT, DÍA/NOCHE). Ordena por escena o por set."
       />
       <div className="mt-6">
-        <StripboardView strips={strips} projectId={projectId} />
+        <StripboardView
+          strips={strips}
+          projectId={projectId}
+          scriptTotalPages={project.script_total_pages ?? undefined}
+        />
       </div>
     </>
   )

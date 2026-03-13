@@ -162,6 +162,7 @@ export function ScriptSection({
       const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
         saveScriptContent: text,
       })
+      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
       router.refresh()
       if (inserted > 0) {
         setImportSuccess(
@@ -221,6 +222,7 @@ export function ScriptSection({
       const { inserted } = await createScenesFromParsed(projectId, scenes, {
         saveScriptContent: text,
       })
+      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
       router.refresh()
       setImportSuccess(
         `Desglose rehecho: ${inserted} escena${inserted !== 1 ? 's' : ''} con cast, SFX, VFX y stunts.`

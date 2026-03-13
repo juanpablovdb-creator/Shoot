@@ -5,6 +5,31 @@ import type { BreakdownCategoryKey } from '@/types'
 
 const DEFAULT_LOCATION_NAME = 'Locaciones del guion'
 
+/** Cada página del guion = 8 octavos. */
+const EIGHTHS_PER_PAGE = 8
+
+/**
+ * Reparte targetEighths entre las escenas de forma proporcional a eighths.
+ * La suma resultante es exactamente targetEighths (ajusta el resto en la primera escena).
+ */
+function normalizeEighthsToTotal(
+  eighths: number[],
+  targetEighths: number
+): number[] {
+  if (eighths.length === 0) return []
+  const sum = eighths.reduce((a, b) => a + b, 0)
+  if (sum <= 0) return eighths.map(() => Math.max(1, Math.floor(targetEighths / eighths.length)))
+  const out = eighths.map((e) =>
+    Math.max(1, Math.round((e / sum) * targetEighths))
+  )
+  let current = out.reduce((a, b) => a + b, 0)
+  const diff = targetEighths - current
+  if (diff !== 0 && out.length > 0) {
+    out[0] = Math.max(1, out[0] + diff)
+  }
+  return out
+}
+
 export interface ParsedElement {
   category: string
   name: string
@@ -29,7 +54,7 @@ export interface ParsedScene {
 export async function createScenesFromParsed(
   projectId: string,
   scenes: ParsedScene[],
-  options?: { saveScriptContent?: string }
+  options?: { saveScriptContent?: string; scriptTotalPages?: number }
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = createClient()
 
@@ -46,6 +71,55 @@ export async function createScenesFromParsed(
       0
     ) ?? 0
   let nextSort = maxSort + 1
+
+  const scenesToInsert: Array<{
+    s: ParsedScene
+    sceneNumber: string
+    intExt: 'INT' | 'EXT'
+    dayNight: 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER'
+    pageEighths: number
+    sceneHeading: string
+    elements: ParsedElement[]
+  }> = []
+  for (const s of scenes) {
+    const sceneNumber = String(s.sceneNumber ?? scenesToInsert.length + 1)
+    if (existingSceneNumbers.has(sceneNumber)) continue
+    const intExt = (s.intExt === 'EXT' ? 'EXT' : 'INT') as 'INT' | 'EXT'
+    const dayNight = ['DÍA', 'NOCHE', 'AMANECER', 'ATARDECER'].includes(
+      s.dayNight ?? ''
+    )
+      ? (s.dayNight as 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER')
+      : 'DÍA'
+    const pageEighths = Math.max(1, Math.min(128, Number(s.pageEighths) || 8))
+    const sceneHeading = (s.sceneHeading ?? '').trim().slice(0, 200)
+    const elements = Array.isArray(s.elements) ? s.elements : []
+    scenesToInsert.push({
+      s,
+      sceneNumber,
+      intExt,
+      dayNight,
+      pageEighths,
+      sceneHeading,
+      elements,
+    })
+  }
+
+  const totalEighths = scenesToInsert.reduce((a, t) => a + t.pageEighths, 0)
+  const skipped = scenes.length - scenesToInsert.length
+  const isFullImport = skipped === 0
+  const scriptTotalPages =
+    options?.scriptTotalPages ??
+    Math.max(1, Math.round(totalEighths / EIGHTHS_PER_PAGE))
+  const targetEighths = isFullImport
+    ? scriptTotalPages * EIGHTHS_PER_PAGE
+    : totalEighths
+  const normalizedEighths =
+    scenesToInsert.length > 0
+      ? normalizeEighthsToTotal(
+          scenesToInsert.map((t) => t.pageEighths),
+          targetEighths
+        )
+      : []
 
   const { data: locs, error: locError } = await supabase
     .from('locations')
@@ -86,23 +160,11 @@ export async function createScenesFromParsed(
     }
   }
   let inserted = 0
-  let skipped = 0
 
-  for (const s of scenes) {
-    const sceneNumber = String(s.sceneNumber ?? inserted + 1)
-    if (existingSceneNumbers.has(sceneNumber)) {
-      skipped++
-      continue
-    }
-    const intExt = (s.intExt === 'EXT' ? 'EXT' : 'INT') as 'INT' | 'EXT'
-    const dayNight = ['DÍA', 'NOCHE', 'AMANECER', 'ATARDECER'].includes(
-      s.dayNight ?? ''
-    )
-      ? (s.dayNight as 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER')
-      : 'DÍA'
-    const pageEighths = Math.max(1, Math.min(128, Number(s.pageEighths) || 8))
-    const sceneHeading = (s.sceneHeading ?? '').trim().slice(0, 200)
-    const elements = Array.isArray(s.elements) ? s.elements : []
+  for (let i = 0; i < scenesToInsert.length; i++) {
+    const { s, sceneNumber, intExt, dayNight, sceneHeading, elements } =
+      scenesToInsert[i]
+    const pageEighths = normalizedEighths[i] ?? 8
 
     let setId: string | null = null
     if (sceneHeading && defaultLocationId) {
@@ -272,11 +334,15 @@ export async function createScenesFromParsed(
     }
   }
 
+  const projectUpdates: { script_content?: string; script_total_pages?: number } = {}
   if (options?.saveScriptContent) {
-    await supabase
-      .from('projects')
-      .update({ script_content: options.saveScriptContent.slice(0, 500000) })
-      .eq('id', projectId)
+    projectUpdates.script_content = options.saveScriptContent.slice(0, 500000)
+  }
+  if (inserted > 0 && skipped === 0) {
+    projectUpdates.script_total_pages = scriptTotalPages
+  }
+  if (Object.keys(projectUpdates).length > 0) {
+    await supabase.from('projects').update(projectUpdates).eq('id', projectId)
   }
 
   return { inserted, skipped }

@@ -12,7 +12,7 @@ export default async function ProjectOverviewPage({
     <div className="rounded-lg border bg-card p-6">
       <h2 className="text-lg font-semibold">Vista general</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Desde aquí puedes ir al desglose de escenas, gestionar elenco y
+        Desde aquí puedes ir al desglose de escenas, gestionar cast y
         locaciones, y trabajar en el stripboard.
       </p>
       <Link

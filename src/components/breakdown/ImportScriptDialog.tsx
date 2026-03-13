@@ -54,6 +54,7 @@ export function ImportScriptDialog({
   async function handleImport() {
     let textToSend = text.trim()
     let isPdf = false
+    let scriptTotalPages: number | undefined
 
     if (pdfFile) {
       isPdf = true
@@ -76,7 +77,12 @@ export function ImportScriptDialog({
           method: 'POST',
           body: formData,
         })
-        const extractData = (await extractRes.json()) as { text?: string; error?: string; details?: string }
+        const extractData = (await extractRes.json()) as {
+          text?: string
+          totalPages?: number
+          error?: string
+          details?: string
+        }
         if (!extractRes.ok) {
           setError(
             extractData.error ?? 'No se pudo extraer texto del PDF.'
@@ -86,6 +92,7 @@ export function ImportScriptDialog({
           return
         }
         const extractedText = (extractData.text ?? '').trim()
+        scriptTotalPages = extractData.totalPages
         if (!extractedText) {
           setError('El PDF no tiene texto extraíble (puede ser solo imágenes). Prueba pegar el texto del guion.')
           setLoading(false)
@@ -120,7 +127,9 @@ export function ImportScriptDialog({
 
       const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
         saveScriptContent: !isPdf && textToSend ? textToSend : undefined,
+        scriptTotalPages,
       })
+      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
 
       setCreated(inserted)
       router.refresh()

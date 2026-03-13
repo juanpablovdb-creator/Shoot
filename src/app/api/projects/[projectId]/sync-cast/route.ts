@@ -6,8 +6,9 @@ import { syncCastFromBreakdown } from '@/lib/sync-cast'
 /**
  * POST /api/projects/[projectId]/sync-cast
  *
- * Sincroniza el elenco (cast_members y scene_cast) desde los elementos del desglose
- * que tienen categoría "cast". Crea cast_members que falten y enlaza escenas con scene_cast.
+ * Sincroniza el cast (cast_members y scene_cast) desde los elementos del desglose
+ * con categoría "cast". Crea cast_members que falten, enlaza escenas con scene_cast
+ * y numera personajes 1, 2, 3… por cantidad de apariciones.
  */
 export async function POST(
   _request: Request,
@@ -48,13 +49,13 @@ export async function POST(
       castMembers,
       message:
         castCount > 0
-          ? `Elenco sincronizado: ${castCount} personaje${castCount !== 1 ? 's' : ''}, ${synced} enlaces escena–personaje añadidos.`
+          ? `Cast sincronizado: ${castCount} personaje${castCount !== 1 ? 's' : ''}, ${synced} enlaces escena–personaje añadidos.`
           : 'No hay personajes en el desglose (elementos con categoría Cast). Importa el guion y usa "Rehacer desglose con IA".',
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     return NextResponse.json(
-      { error: 'Error al sincronizar elenco', details: message },
+      { error: 'Error al sincronizar cast', details: message },
       { status: 500 }
     )
   }

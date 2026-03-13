@@ -26,6 +26,10 @@ import {
 import { PROJECT_TYPES } from '@/lib/constants/project-types'
 import type { ProjectType } from '@/types'
 import { Upload, FileUp } from 'lucide-react'
+import {
+  createScenesFromParsed,
+  type ParsedScene,
+} from '@/lib/breakdown-import'
 
 const BUCKET = 'project-scripts'
 const SCRIPT_PATH = (projectId: string) => `${projectId}/script.pdf`
@@ -108,8 +112,42 @@ export default function NewProjectPage() {
       setLoading(false)
       return
     }
+
+    // Desglose automático: extraer texto, parsear con IA, crear escenas y sincronizar cast
+    try {
+      const extractRes = await fetch(`/api/projects/${projectId}/extract-script`)
+      const extractData = (await extractRes.json()) as {
+        text?: string
+        error?: string
+        details?: string
+      }
+      if (!extractRes.ok || !extractData.text?.trim()) {
+        router.push(`/projects/${projectId}/breakdown`)
+        setLoading(false)
+        return
+      }
+      const text = extractData.text.trim()
+      const parseRes = await fetch('/api/parse-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, projectId }),
+      })
+      const parseData = (await parseRes.json()) as {
+        scenes?: ParsedScene[]
+        error?: string
+        details?: string
+      }
+      if (parseRes.ok && Array.isArray(parseData.scenes) && parseData.scenes.length > 0) {
+        await createScenesFromParsed(projectId, parseData.scenes, {
+          saveScriptContent: text,
+        })
+        await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
+      }
+    } catch {
+      // Si falla el desglose automático, igual llevamos al usuario al Desglose
+    }
     setLoading(false)
-    router.push(`/projects/${projectId}`)
+    router.push(`/projects/${projectId}/breakdown`)
   }
 
   return (
@@ -218,7 +256,9 @@ export default function NewProjectPage() {
             )}
             <div className="flex gap-2">
               <Button type="submit" disabled={loading}>
-                {loading ? 'Creando...' : 'Crear proyecto'}
+                {loading
+                  ? 'Creando proyecto y generando desglose...'
+                  : 'Crear proyecto'}
               </Button>
               <Link href="/projects" className={cn(buttonVariants({ variant: 'outline' }))}>
                 Cancelar

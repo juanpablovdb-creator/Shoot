@@ -2,7 +2,6 @@
 
 import { getStripColor } from '@/lib/constants/strip-colors'
 import { STRIP_COLORS } from '@/lib/constants/strip-colors'
-import { formatEighths } from '@/lib/utils/eighths'
 import type { IntExt, DayNight } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -14,23 +13,35 @@ export interface StripRowData {
   day_night: DayNight
   set_name?: string | null
   synopsis?: string | null
+  /** Locación específica de rodaje (ej. ESTUDIO BOGOTÁ, CHILE) */
+  specificLocation?: string | null
   page_eighths: number
   has_stunts: boolean
   has_sfx: boolean
   has_vfx: boolean
+  /** Números de cast (actores, &lt; 100) */
   castNumbers: number[]
+  /** Números de stunts (coordinador 100, etc.) */
+  stuntNumbers: number[]
   /** Nombres de personaje cuando no hay scene_cast (fallback desde scene_elements) */
   castNames?: string[]
   setLocationName?: string
 }
 
-/** Páginas en octavos tipo Movie Magic: "1", "6/8", "1 6/8". */
+/** Páginas en octavos: siempre muestra "X Y/8" (cada página = 8 octavos). */
 function formatPagesEighths(eighths: number): string {
-  const full = Math.floor(eighths / 8)
-  const rem = eighths % 8
-  if (rem === 0) return full ? `${full}` : '0'
-  if (full === 0) return `${rem}/8`
-  return `${full} ${rem}/8`
+  const e = Math.max(0, Math.round(Number(eighths)) || 0)
+  const full = Math.floor(e / 8)
+  const rem = e % 8
+  if (full === 0) return rem === 0 ? '0' : `${rem}/8`
+  return rem === 0 ? `${full} 0/8` : `${full} ${rem}/8`
+}
+
+const dayNightLabel: Record<string, string> = {
+  DÍA: 'Día',
+  NOCHE: 'Noche',
+  ATARDECER: 'Atardec',
+  AMANECER: 'Aman',
 }
 
 export function StripRow({
@@ -40,89 +51,106 @@ export function StripRow({
   set_name,
   setLocationName,
   synopsis,
+  specificLocation,
   page_eighths,
   has_stunts,
   has_sfx,
   has_vfx,
   castNumbers,
+  stuntNumbers,
   castNames,
   className,
 }: StripRowData & { className?: string }) {
   const castDisplay =
     castNumbers.length > 0
-      ? castNumbers.join(', ')
+      ? `Cast: ${castNumbers.join(', ')}`
       : (castNames?.length ?? 0) > 0
-        ? castNames!.join(', ')
-        : '—'
+        ? `Cast: ${castNames!.join(', ')}`
+        : 'Cast: —'
+  const stuntsDisplay =
+    stuntNumbers.length > 0 ? `Stunts: ${stuntNumbers.join(', ')}` : 'Stunts:'
   const colorKey = getStripColor(int_ext, day_night)
   const stripStyle = STRIP_COLORS[colorKey]
-  const setLabel = set_name ?? setLocationName ?? '—'
-  const todLabel =
-    day_night === 'DÍA'
-      ? 'DD'
-      : day_night === 'NOCHE'
-        ? 'Noche'
-        : day_night === 'ATARDECER'
-          ? 'ATARD.'
-          : day_night === 'AMANECER'
-            ? 'AMAN.'
-            : day_night
+  const titleLabel = set_name ?? setLocationName ?? '—'
+  const todLabel = dayNightLabel[day_night] ?? day_night
+  const locationLabel = specificLocation && specificLocation.trim() !== '' ? specificLocation : 'Por definir'
+
+  // Líneas que llegan hasta abajo: una sola fila con items-stretch; borde derecho en cada celda
+  const colBorder = 'border-r border-gray-800'
+  const elementsLine = [
+    'STU',
+    has_stunts ? '✓' : '—',
+    'SFX',
+    has_sfx ? '✓' : '—',
+    'VFX',
+    has_vfx ? '✓' : '—',
+    'Ext: 0',
+    'Bits: 0',
+  ].join(' ')
 
   return (
     <div
       className={cn(
-        'flex min-h-[72px] items-stretch border-b border-border/80 transition-colors hover:opacity-95',
+        'flex min-h-[72px] items-stretch border-b border-gray-800 transition-colors hover:opacity-95',
         className
       )}
       style={{ backgroundColor: stripStyle.bgStrip ?? stripStyle.bg }}
       role="row"
     >
+      {/* Franja de color */}
       <div
-        className="w-2 shrink-0"
+        className={cn('w-2 shrink-0', colBorder)}
         style={{ backgroundColor: stripStyle.bg }}
         aria-label={`${int_ext} ${day_night}`}
       />
-      {/* Columna Escena: ancho fijo para que ATARD./AMAN. quepan sin salirse */}
-      <div className="flex w-[124px] shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 border-r border-border/60 px-2.5 py-2">
-        <span className="tabular-nums text-sm font-semibold text-gray-900">
-          {scene_number}
-        </span>
-        <span
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold"
-          style={{
-            backgroundColor: stripStyle.bg,
-            color: stripStyle.textColor ?? '#1f2937',
-          }}
-        >
-          {int_ext}
-        </span>
-        <span className="min-w-0 shrink-0 text-xs font-medium text-gray-800">
-          {todLabel}
-        </span>
+      {/* Escena: número grande + Día abajo */}
+      <div className={cn('flex w-[52px] shrink-0 flex-col justify-center px-1.5', colBorder)}>
+        <span className="text-base font-bold tabular-nums text-gray-900">{scene_number}</span>
+        <span className="text-[11px] font-normal text-gray-800">{todLabel}</span>
       </div>
-      {/* Set + Sinopsis: texto siempre oscuro sobre fondo claro de la franja */}
-      <div className="min-w-[280px] flex-1 border-r border-border/60 px-3 py-2">
-        <div className="text-sm font-semibold text-gray-900">{setLabel}</div>
-        {synopsis && (
-          <div className="mt-1 line-clamp-3 text-[13px] leading-snug text-gray-700">
-            {synopsis}
+      {/* Bloque Título + Locación esp.: crece para ocupar el ancho disponible */}
+      <div className={cn('flex min-w-[300px] flex-1 flex-col', colBorder)}>
+        {/* Mitad superior: Título | Locación esp. (la línea entre ellos solo aquí = hasta la mitad) */}
+        <div className="flex min-h-[36px] flex-1">
+          <div className="flex min-w-0 flex-1 flex-col justify-start border-r border-gray-800 px-2 py-1.5">
+            <span className="text-xs font-normal text-gray-800">{int_ext}</span>
+            <span className="mt-0.5 text-base font-bold leading-tight text-gray-900">{titleLabel}</span>
           </div>
-        )}
+          <div className="flex w-[100px] shrink-0 items-start px-2 py-1.5">
+            <span className="text-xs font-normal text-gray-800">{locationLabel}</span>
+          </div>
+        </div>
+        {/* Mitad inferior: descripción entre las dos columnas (sin línea en medio) */}
+        <div className="flex w-full px-2 py-1 pb-1.5">
+          {synopsis && (
+            <div className="line-clamp-3 w-full text-[11px] font-normal leading-snug text-gray-700">
+              {synopsis}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex w-[88px] shrink-0 items-center justify-center border-r border-border/60 px-2 py-2 text-center text-sm tabular-nums text-gray-900">
-        {castDisplay}
+      {/* Cast: arriba "Cast: n", línea horizontal, abajo STU SFX Ext Bits */}
+      <div className={cn('flex w-[100px] shrink-0 flex-col', colBorder)}>
+        <div className="flex flex-1 flex-col justify-center px-2 py-1">
+          <span className="text-xs font-normal text-gray-900 underline decoration-gray-900/60">{castDisplay}</span>
+        </div>
+        <div className="border-t border-gray-800" />
+        <div className="flex items-center px-2 py-1">
+          <span className="text-[10px] font-normal leading-tight text-gray-700">{elementsLine}</span>
+        </div>
       </div>
-      <div className="flex w-[40px] shrink-0 items-center justify-center border-r border-border/60 py-2 text-center text-sm font-medium text-gray-900">
-        {has_sfx ? '✓' : '—'}
+      {/* Stunts: arriba "Stunts:n", línea, abajo vacío */}
+      <div className={cn('flex w-[72px] shrink-0 flex-col', colBorder)}>
+        <div className="flex flex-1 flex-col justify-center px-2 py-1">
+          <span className="text-xs font-normal tabular-nums text-gray-900">{stuntsDisplay}</span>
+        </div>
+        <div className="border-t border-gray-800" />
+        <div className="min-h-[20px] px-2 py-1" />
       </div>
-      <div className="flex w-[40px] shrink-0 items-center justify-center border-r border-border/60 py-2 text-center text-sm font-medium text-gray-900">
-        {has_vfx ? '✓' : '—'}
-      </div>
-      <div className="flex w-[40px] shrink-0 items-center justify-center border-r border-border/60 py-2 text-center text-sm font-medium text-gray-900">
-        {has_stunts ? '✓' : '—'}
-      </div>
-      <div className="flex w-[52px] shrink-0 items-center justify-center px-2 py-2 text-sm tabular-nums text-gray-900">
-        {formatPagesEighths(page_eighths)}
+      {/* Págs: etiqueta pequeña + número grande */}
+      <div className={cn('flex w-[52px] shrink-0 flex-col items-end justify-center px-2 py-1.5', colBorder)}>
+        <span className="text-[10px] font-normal text-gray-700">Págs.</span>
+        <span className="text-base font-bold tabular-nums text-gray-900">{formatPagesEighths(page_eighths)}</span>
       </div>
     </div>
   )
