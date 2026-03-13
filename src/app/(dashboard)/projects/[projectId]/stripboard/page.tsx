@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { StripboardView } from '@/components/stripboard/StripboardView'
 import type { StripRowData } from '@/components/stripboard/StripRow'
 
+export const dynamic = 'force-dynamic'
+
 export default async function StripboardPage({
   params,
 }: {

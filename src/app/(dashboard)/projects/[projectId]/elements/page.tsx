@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
 import type { BreakdownCategoryKey } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ElementsPage({
   params,
 }: {

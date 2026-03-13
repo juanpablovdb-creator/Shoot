@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
@@ -26,10 +26,17 @@ export function CastSection({
   const [loadingList, setLoadingList] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const hasLoadedCastRef = useRef(false)
 
   useEffect(() => {
     if (initialCastMembers.length > 0) {
+      hasLoadedCastRef.current = true
       setCastMembers(initialCastMembers)
+      return
+    }
+    // Si ya tenemos elenco en estado (p. ej. tras sincronizar), no mostrar "Cargando..." para no ocultar la tabla
+    if (hasLoadedCastRef.current) {
+      setLoadingList(false)
       return
     }
     let cancelled = false
@@ -38,6 +45,7 @@ export function CastSection({
       .then((res) => res.json())
       .then((data: { castMembers?: CastMember[] }) => {
         if (!cancelled && Array.isArray(data.castMembers)) {
+          hasLoadedCastRef.current = true
           setCastMembers(data.castMembers)
         }
       })
@@ -70,6 +78,7 @@ export function CastSection({
       }
       setMessage(data.message ?? 'Elenco sincronizado.')
       if (Array.isArray(data.castMembers)) {
+        hasLoadedCastRef.current = true
         setCastMembers(data.castMembers)
       }
       router.refresh()

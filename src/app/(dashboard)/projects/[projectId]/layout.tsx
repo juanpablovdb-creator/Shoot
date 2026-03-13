@@ -10,6 +10,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 const nav = [
   { href: 'breakdown', label: 'Desglose', icon: FileText },
   { href: 'elements', label: 'Elementos', icon: LayoutGrid },
@@ -55,6 +57,7 @@ export default async function ProjectLayout({
             <Link
               key={item.href}
               href={`/projects/${projectId}/${item.href}`}
+              prefetch={false}
               className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/20 hover:bg-muted/50"
             >
               <Icon className="size-4" />
