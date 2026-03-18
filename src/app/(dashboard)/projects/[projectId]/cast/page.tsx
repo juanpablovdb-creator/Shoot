@@ -3,7 +3,8 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { CastSection } from '@/components/cast/CastSection'
-import { getCastFromBreakdown, syncCastFromBreakdown } from '@/lib/sync-cast'
+import { SceneCastBreakdownTable } from '@/components/cast/SceneCastBreakdownTable'
+import { getCastFromBreakdown, getSceneCastBreakdown, syncCastFromBreakdown } from '@/lib/sync-cast'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +24,9 @@ export default async function CastPage({
 
   if (projectError || !project) notFound()
 
-  // Misma fuente que Elementos: cast desde breakdown_elements (siempre lo que ves en Elementos)
+  await syncCastFromBreakdown(supabase, projectId)
   const castMembers = await getCastFromBreakdown(supabase, projectId)
-
-  // Mantener cast_members y scene_cast en sync para stripboard y demás
-  if (castMembers.length > 0) {
-    await syncCastFromBreakdown(supabase, projectId)
-  }
+  const sceneCastBreakdown = await getSceneCastBreakdown(supabase, projectId)
 
   return (
     <>
@@ -40,6 +37,9 @@ export default async function CastPage({
       <CastSection
         projectId={projectId}
         initialCastMembers={castMembers}
+      />
+      <SceneCastBreakdownTable
+        rows={sceneCastBreakdown.map((r) => ({ scene_number: r.scene_number, cast_names: r.cast_names }))}
       />
     </>
   )

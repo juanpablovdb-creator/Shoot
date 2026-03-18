@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getCastFromBreakdown } from '@/lib/sync-cast'
+import { getCastFromBreakdown, syncCastFromBreakdown } from '@/lib/sync-cast'
 
 /**
  * GET /api/projects/[projectId]/cast-members
@@ -34,6 +34,7 @@ export async function GET(
       return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
     }
 
+    await syncCastFromBreakdown(supabase, projectId)
     const castMembers = await getCastFromBreakdown(supabase, projectId)
 
     return NextResponse.json(

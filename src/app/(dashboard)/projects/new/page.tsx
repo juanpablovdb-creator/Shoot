@@ -26,10 +26,7 @@ import {
 import { PROJECT_TYPES } from '@/lib/constants/project-types'
 import type { ProjectType } from '@/types'
 import { Upload, FileUp } from 'lucide-react'
-import {
-  createScenesFromParsed,
-  type ParsedScene,
-} from '@/lib/breakdown-import'
+import type { ParsedScene } from '@/lib/breakdown-import'
 
 const BUCKET = 'project-scripts'
 const SCRIPT_PATH = (projectId: string) => `${projectId}/script.pdf`
@@ -138,10 +135,11 @@ export default function NewProjectPage() {
         details?: string
       }
       if (parseRes.ok && Array.isArray(parseData.scenes) && parseData.scenes.length > 0) {
-        await createScenesFromParsed(projectId, parseData.scenes, {
-          saveScriptContent: text,
+        await fetch(`/api/projects/${projectId}/breakdown/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenes: parseData.scenes, saveScriptContent: text }),
         })
-        await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
       }
     } catch {
       // Si falla el desglose automático, igual llevamos al usuario al Desglose

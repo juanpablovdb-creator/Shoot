@@ -29,6 +29,15 @@ export type BreakdownCategoryKey =
   | 'arte'
   | 'grafica_archivo'
   | 'musica'
+  | 'fotografia'
+  | 'sonido'
+  | 'fotografias'
+  | 'produccion'
+  | 'notes'
+  | 'coreografia_baile'
+  | 'observaciones'
+  | 'maq_pelo'
+  | 'maq_fx'
 
 export interface Project {
   id: string
@@ -61,6 +70,15 @@ export interface Scene {
   has_stunts: boolean
   has_sfx: boolean
   has_vfx: boolean
+  script_page: number | null
+  script_day: number | null
+  unit: string | null
+  sequence: string | null
+  location: string | null
+  est_time: string | null
+  comments: string | null
+  scene_note: string | null
+  scene_from: string | null
   created_at: string
   updated_at: string
 }
@@ -78,7 +96,7 @@ export interface BreakdownElement {
 export interface SceneElement {
   id: string
   scene_id: string
-  breakdown_element_id: string
+  element_id: string
   breakdown_elements?: BreakdownElement
 }
 

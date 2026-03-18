@@ -33,16 +33,14 @@ import { PROJECT_TYPES } from '@/lib/constants/project-types'
 import { cn } from '@/lib/utils'
 import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
 
-function loadProjects(): Promise<Project[]> {
+async function loadProjects(): Promise<Project[]> {
   const supabase = createClient()
-  return supabase
+  const { data, error } = await supabase
     .from('projects')
     .select('id, name, code, project_type, created_at')
     .order('created_at', { ascending: false })
-    .then(({ data, error }) => {
-      if (error) throw new Error(error.message)
-      return (data as Project[]) ?? []
-    })
+  if (error) throw new Error(error.message)
+  return (data as Project[]) ?? []
 }
 
 export function ProjectsList() {

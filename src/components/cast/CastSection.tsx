@@ -21,15 +21,19 @@ export function CastSection({
   const [castMembers, setCastMembers] = useState<CastMember[]>(initialCastMembers ?? [])
   const [loadingList, setLoadingList] = useState(false)
 
-  // Refrescar cast desde la API al montar (sin cache); un reintento si llega vacío (p. ej. tras desglose)
+  // Usar datos del servidor (tienen apariciones y orden correcto). Solo refetch si no hay datos o no hay apariciones.
+  const hasGoodInitialData =
+    initialCastMembers.length > 0 &&
+    initialCastMembers.some((c) => (c.appearance_count ?? 0) > 0)
+
   useEffect(() => {
-    let cancelled = false
-    let retryTimer: ReturnType<typeof setTimeout> | null = null
     if (initialCastMembers.length > 0) {
       setCastMembers(initialCastMembers)
-    } else {
-      setLoadingList(true)
     }
+    if (hasGoodInitialData) return
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    setLoadingList(true)
     const load = (isRetry = false) => {
       fetch(`/api/projects/${projectId}/cast-members`, { cache: 'no-store' })
         .then((res) => res.json())
@@ -37,7 +41,10 @@ export function CastSection({
           if (cancelled) return
           if (!Array.isArray(data.castMembers)) return
           const list = data.castMembers
-          setCastMembers((prev) => (list.length > 0 ? list : prev.length > 0 ? prev : list))
+          const hasAppearances = list.some((c) => (c.appearance_count ?? 0) > 0)
+          setCastMembers((prev) =>
+            list.length > 0 && (hasAppearances || prev.length === 0) ? list : prev
+          )
           if (list.length === 0 && !isRetry) {
             retryTimer = setTimeout(() => {
               if (!cancelled) load(true)
@@ -53,7 +60,7 @@ export function CastSection({
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
     }
-  }, [projectId])
+  }, [projectId, hasGoodInitialData, initialCastMembers])
 
   return (
     <div className="mt-6 space-y-4">

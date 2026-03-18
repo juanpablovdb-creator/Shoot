@@ -6,9 +6,11 @@ import { syncCastFromBreakdown } from '@/lib/sync-cast'
 /**
  * POST /api/projects/[projectId]/sync-cast
  *
- * Sincroniza el cast (cast_members y scene_cast) desde los elementos del desglose
- * con categoría "cast". Crea cast_members que falten, enlaza escenas con scene_cast
- * y numera personajes 1, 2, 3… por cantidad de apariciones.
+ * Sincroniza cast_members y scene_cast desde breakdown_elements (categoría "cast").
+ * Se llama automáticamente tras importar/rehacer desglose y al cargar la pestaña Cast.
+ * No es necesario que el usuario "sincronice" a mano: Desglose y Elementos leen
+ * siempre de breakdown_elements/scene_elements. Esta sync sirve para que el
+ * stripboard y otras vistas que usan cast_members tengan datos al día.
  */
 export async function POST(
   _request: Request,

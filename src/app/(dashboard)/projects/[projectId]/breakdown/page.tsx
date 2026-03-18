@@ -3,7 +3,7 @@ import { BreakdownSheet } from '@/components/breakdown/BreakdownSheet'
 import type { BreakdownSheetProps } from '@/components/breakdown/BreakdownSheet'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { getCastFromBreakdown } from '@/lib/sync-cast'
+import { getCastFromBreakdown, syncCastFromBreakdown } from '@/lib/sync-cast'
 
 export default async function BreakdownPage({
   params,
@@ -19,6 +19,8 @@ export default async function BreakdownPage({
     .single()
 
   if (projectError || !project) notFound()
+
+  await syncCastFromBreakdown(supabase, projectId)
 
   const [scenesResult, castList] = await Promise.all([
     supabase
@@ -48,9 +50,16 @@ export default async function BreakdownPage({
   const scenes = scenesResult.data ?? []
   // Por nombre base (ej. "Abuelo" y "Abuelo (74)" → mismo personaje) para mostrar apariciones en el desglose
   const castAppearanceCountsByName: Record<string, number> = {}
+  const castByBaseName: Record<string, { cast_number: number; character_name: string }> = {}
   for (const c of castList) {
     const base = (c.character_name ?? '').trim().replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase()
-    if (base) castAppearanceCountsByName[base] = c.appearance_count ?? 0
+    if (base) {
+      castAppearanceCountsByName[base] = c.appearance_count ?? 0
+      castByBaseName[base] = {
+        cast_number: c.cast_number,
+        character_name: (c.character_name ?? '').trim(),
+      }
+    }
   }
 
   return (
@@ -68,6 +77,7 @@ export default async function BreakdownPage({
           initialScriptFileName={project.script_file_name ?? null}
           initialScenes={scenes as unknown as BreakdownSheetProps['initialScenes']}
           castAppearanceCountsByName={castAppearanceCountsByName}
+          castByBaseName={castByBaseName}
         />
       </div>
     </>

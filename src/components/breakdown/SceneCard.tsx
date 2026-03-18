@@ -3,7 +3,7 @@
 import { getStripColor } from '@/lib/constants/strip-colors'
 import { STRIP_COLORS } from '@/lib/constants/strip-colors'
 import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
-import { formatEighths } from '@/lib/utils/eighths'
+import { formatEighthsOctavosOnly } from '@/lib/utils/eighths'
 import type { IntExt, DayNight } from '@/types'
 import { cn } from '@/lib/utils'
 import type { BreakdownCategoryKey } from '@/types'
@@ -110,7 +110,7 @@ export function SceneCard({
               </span>
             )}
             <span className="ml-auto text-xs text-muted-foreground">
-              {formatEighths(pageEighths)} pág.
+              {formatEighthsOctavosOnly(pageEighths)} pág.
             </span>
           </div>
 

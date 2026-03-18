@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { SceneCard } from './SceneCard'
 import { ImportScriptDialog } from './ImportScriptDialog'
 import { ScriptSection } from './ScriptSection'
@@ -38,6 +39,12 @@ interface SceneRow {
   }>
 }
 
+/** Nombre base (lowercase) → número y nombre para mostrar en cards (desde getCastFromBreakdown). */
+export type CastByBaseName = Record<
+  string,
+  { cast_number: number; character_name: string }
+>
+
 export interface BreakdownSheetProps {
   projectId: string
   projectName: string
@@ -47,6 +54,16 @@ export interface BreakdownSheetProps {
   initialScenes: SceneRow[]
   /** Nombre base (lowercase) → cantidad de apariciones (para mostrar en cada escena). */
   castAppearanceCountsByName?: Record<string, number>
+  /** Nombre base (lowercase) → cast_number y character_name para derivar cast en cards desde scene_elements. */
+  castByBaseName?: CastByBaseName
+}
+
+function baseCharacterName(name: string): string {
+  return (name ?? '')
+    .trim()
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .trim()
+    .toLowerCase()
 }
 
 export function BreakdownSheet({
@@ -57,11 +74,9 @@ export function BreakdownSheet({
   initialScriptFileName = null,
   initialScenes,
   castAppearanceCountsByName,
+  castByBaseName = {},
 }: BreakdownSheetProps) {
-  const castNumbers = (row: SceneRow) =>
-    (row.scene_cast ?? [])
-      .map((c) => c.cast_members?.cast_number)
-      .filter((n): n is number => n != null)
+  const router = useRouter()
   const stuntNumbers = (row: SceneRow) =>
     (row.scene_cast ?? []).filter(
       (c) => c.cast_members && c.cast_members.cast_number >= 100
@@ -167,13 +182,27 @@ export function BreakdownSheet({
               hasStunts={scene.has_stunts}
               hasSfx={scene.has_sfx}
               hasVfx={scene.has_vfx}
-              castEntries={(scene.scene_cast ?? [])
-                .map((c) => c.cast_members)
-                .filter((m): m is { cast_number: number; character_name: string | null } => m != null)
-                .map((m) => ({
-                  cast_number: m.cast_number,
-                  character_name: (m.character_name ?? '').trim(),
-                }))}
+              castEntries={(() => {
+                const fromElements = (scene.scene_elements ?? [])
+                  .map((e) => e.breakdown_elements)
+                  .filter(
+                    (be): be is { name: string; category: string } =>
+                      be != null && be.category === 'cast' && !!be.name?.trim()
+                  )
+                const seen = new Set<string>()
+                return fromElements
+                  .map((be) => {
+                    const name = be.name.trim()
+                    const base = baseCharacterName(name)
+                    const info = castByBaseName[base]
+                    const cast_number = info?.cast_number ?? 0
+                    const character_name = info?.character_name ?? name
+                    if (seen.has(base)) return null
+                    seen.add(base)
+                    return { cast_number, character_name }
+                  })
+                  .filter((e): e is { cast_number: number; character_name: string } => e != null)
+              })()}
               castAppearanceCountsByName={castAppearanceCountsByName}
               stuntNumbers={stuntNumbers(scene)}
               elements={
@@ -188,7 +217,9 @@ export function BreakdownSheet({
                 })) ?? []
               }
               onClick={() => {
-                window.location.href = `/projects/${projectId}/breakdown/${scene.id}`
+                if (scene?.id) {
+                  router.push(`/projects/${projectId}/breakdown/${scene.id}`)
+                }
               }}
             />
             )

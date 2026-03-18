@@ -18,3 +18,9 @@ export function formatEighths(eighths: number): string {
   if (fullPages === 0) return `${remainingEighths}/8`
   return `${fullPages} ${remainingEighths}/8`
 }
+
+/** Formato solo en octavos (ej. "6/8", "14/8"). No muestra "1" a menos que sea página entera. */
+export function formatEighthsOctavosOnly(eighths: number): string {
+  const e = Math.max(0, Math.round(Number(eighths)) || 0)
+  return `${e}/8`
+}

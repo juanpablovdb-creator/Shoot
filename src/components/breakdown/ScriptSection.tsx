@@ -13,11 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { ImportScriptDialog } from './ImportScriptDialog'
 import { FileText, Upload, Loader2, FileUp } from 'lucide-react'
-import {
-  createScenesFromParsed,
-  deleteAllProjectScenes,
-  type ParsedScene,
-} from '@/lib/breakdown-import'
+import { deleteAllProjectScenes, type ParsedScene } from '@/lib/breakdown-import'
 
 const BUCKET = 'project-scripts'
 
@@ -45,6 +41,7 @@ export function ScriptSection({
   const [extracting, setExtracting] = useState(false)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
   const [rehacerLoading, setRehacerLoading] = useState(false)
+  const [useGpt4, setUseGpt4] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const hasPdf = Boolean(initialScriptFilePath)
@@ -140,18 +137,18 @@ export function ScriptSection({
       const parseRes = await fetch('/api/parse-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, projectId }),
+        body: JSON.stringify({ text, projectId, useGpt4 }),
       })
       const parseData = (await parseRes.json()) as {
         scenes?: ParsedScene[]
         error?: string
         details?: string
+        hint?: string
       }
       if (!parseRes.ok) {
-        setUploadError(
-          parseData.error ?? 'Error al parsear el guion'
-            + (parseData.details ? ` (${parseData.details})` : '')
-        )
+        const msg = parseData.error ?? 'Error al parsear el guion'
+        const parts = [msg, parseData.details, parseData.hint].filter(Boolean)
+        setUploadError(parts.join(' · '))
         return
       }
       const scenes = parseData.scenes ?? []
@@ -159,10 +156,27 @@ export function ScriptSection({
         setUploadError('No se detectaron escenas en el texto.')
         return
       }
-      const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
-        saveScriptContent: text,
+      const importRes = await fetch(`/api/projects/${projectId}/breakdown/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes, saveScriptContent: text }),
       })
-      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
+      const importData = (await importRes.json()) as {
+        inserted?: number
+        skipped?: number
+        error?: string
+        details?: string
+      }
+      if (!importRes.ok) {
+        const parts = [
+          importData.error ?? 'Error al importar desglose',
+          importData.details,
+        ].filter(Boolean)
+        setUploadError(parts.join(' · '))
+        return
+      }
+      const inserted = importData.inserted ?? 0
+      const skipped = importData.skipped ?? 0
       router.refresh()
       if (inserted > 0) {
         setImportSuccess(
@@ -206,11 +220,13 @@ export function ScriptSection({
       const parseRes = await fetch('/api/parse-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, projectId }),
+        body: JSON.stringify({ text, projectId, useGpt4 }),
       })
-      const parseData = (await parseRes.json()) as { scenes?: ParsedScene[]; error?: string; details?: string }
+      const parseData = (await parseRes.json()) as { scenes?: ParsedScene[]; error?: string; details?: string; hint?: string }
       if (!parseRes.ok) {
-        setUploadError(parseData.error ?? 'Error al analizar el guion' + (parseData.details ? ` (${parseData.details})` : ''))
+        const msg = parseData.error ?? 'Error al analizar el guion'
+        const parts = [msg, parseData.details, parseData.hint].filter(Boolean)
+        setUploadError(parts.join(' · '))
         return
       }
       const scenes = parseData.scenes ?? []
@@ -219,10 +235,25 @@ export function ScriptSection({
         return
       }
       await deleteAllProjectScenes(projectId)
-      const { inserted } = await createScenesFromParsed(projectId, scenes, {
-        saveScriptContent: text,
+      const importRes = await fetch(`/api/projects/${projectId}/breakdown/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes, saveScriptContent: text }),
       })
-      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
+      const importData = (await importRes.json()) as {
+        inserted?: number
+        error?: string
+        details?: string
+      }
+      if (!importRes.ok) {
+        const parts = [
+          importData.error ?? 'Error al importar desglose',
+          importData.details,
+        ].filter(Boolean)
+        setUploadError(parts.join(' · '))
+        return
+      }
+      const inserted = importData.inserted ?? 0
       router.refresh()
       setImportSuccess(
         `Desglose rehecho: ${inserted} escena${inserted !== 1 ? 's' : ''} con cast, SFX, VFX y stunts.`
@@ -294,7 +325,17 @@ export function ScriptSection({
                   </span>
                 ) : null}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useGpt4}
+                    onChange={(e) => setUseGpt4(e.target.checked)}
+                    disabled={extracting || rehacerLoading}
+                    className="rounded border-input"
+                  />
+                  <span className="text-xs text-muted-foreground">Usar GPT-4</span>
+                </label>
                 <Button
                   type="button"
                   variant="outline"

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { StripboardView } from '@/components/stripboard/StripboardView'
 import type { StripRowData } from '@/components/stripboard/StripRow'
+import { syncCastFromBreakdown } from '@/lib/sync-cast'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,8 @@ export default async function StripboardPage({
     .single()
 
   if (projectError || !project) notFound()
+
+  await syncCastFromBreakdown(supabase, projectId)
 
   const [{ data: scenes }, { data: castMembers }] = await Promise.all([
     supabase
@@ -54,7 +57,10 @@ export default async function StripboardPage({
   for (const cm of castMembers ?? []) {
     const name = (cm.character_name ?? '').trim()
     if (name && cm.cast_number != null) {
-      nameToCastNumber.set(name.toLowerCase(), cm.cast_number)
+      const key = name.toLowerCase()
+      nameToCastNumber.set(key, cm.cast_number)
+      const baseKey = key.replace(/\s*\(\d+\)\s*$/, '').trim()
+      if (baseKey && baseKey !== key) nameToCastNumber.set(baseKey, cm.cast_number)
     }
   }
 
@@ -72,9 +78,12 @@ export default async function StripboardPage({
           ? (locations[0] as { name?: string }).name
           : null
 
-    const allCastNumbers = (scene.scene_cast ?? [])
-      .map((c: { cast_members?: { cast_number?: number } }) => c.cast_members?.cast_number)
-      .filter((n): n is number => n != null)
+    const sceneCastRows = scene.scene_cast ?? []
+    const allCastNumbers = sceneCastRows.flatMap((c: { cast_members?: { cast_number?: number } | { cast_number?: number }[] }) => {
+      const m = c.cast_members
+      if (Array.isArray(m)) return m.map((x) => x?.cast_number).filter((n): n is number => n != null)
+      return m?.cast_number != null ? [m.cast_number] : []
+    })
     let castNumbers = allCastNumbers.filter((n) => n < 100)
     const stuntNumbers = allCastNumbers.filter((n) => n >= 100)
 
@@ -91,7 +100,10 @@ export default async function StripboardPage({
     if (castNumbers.length === 0 && castFromElements.length > 0) {
       const seen = new Set<number>()
       castNumbers = castFromElements
-        .map((name) => nameToCastNumber.get(name.trim().toLowerCase()))
+        .map((name) => {
+          const key = name.trim().toLowerCase()
+          return nameToCastNumber.get(key) ?? nameToCastNumber.get(key.replace(/\s*\(\d+\)\s*$/, '').trim())
+        })
         .filter((n): n is number => n != null && n < 100 && !seen.has(n) && (seen.add(n), true))
     }
 

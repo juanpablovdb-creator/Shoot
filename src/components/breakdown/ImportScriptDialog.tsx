@@ -12,10 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { FileText } from 'lucide-react'
-import {
-  createScenesFromParsed,
-  type ParsedScene,
-} from '@/lib/breakdown-import'
+import type { ParsedScene } from '@/lib/breakdown-import'
 
 export function ImportScriptDialog({
   projectId,
@@ -43,6 +40,8 @@ export function ImportScriptDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<number | null>(null)
+  const [openaiCheck, setOpenaiCheck] = useState<string | null>(null)
+  const [useGpt4, setUseGpt4] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -101,20 +100,31 @@ export function ImportScriptDialog({
         res = await fetch('/api/parse-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: extractedText, projectId }),
+          body: JSON.stringify({
+            text: extractedText,
+            projectId,
+            useGpt4,
+            ...(scriptTotalPages != null && { totalPages: scriptTotalPages }),
+          }),
         })
       } else {
         res = await fetch('/api/parse-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: textToSend }),
+          body: JSON.stringify({ text: textToSend, useGpt4 }),
         })
       }
 
-      const data = await res.json()
+      const data = await res.json() as {
+        error?: string
+        details?: string
+        hint?: string
+        scenes?: unknown[]
+      }
       if (!res.ok) {
         const msg = data.error ?? 'Error al parsear el guion'
-        setError(data.details ? `${msg} ${data.details}` : msg)
+        const parts = [msg, data.details, data.hint].filter(Boolean)
+        setError(parts.join(' · '))
         setLoading(false)
         return
       }
@@ -125,15 +135,41 @@ export function ImportScriptDialog({
         return
       }
 
-      const { inserted, skipped } = await createScenesFromParsed(projectId, scenes, {
-        saveScriptContent: !isPdf && textToSend ? textToSend : undefined,
-        scriptTotalPages,
+      const importRes = await fetch(`/api/projects/${projectId}/breakdown/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scenes,
+          scriptTotalPages,
+          saveScriptContent: !isPdf && textToSend ? textToSend : undefined,
+        }),
       })
-      await fetch(`/api/projects/${projectId}/sync-cast`, { method: 'POST' })
+      const importData = await importRes.json() as {
+        inserted?: number
+        skipped?: number
+        errors?: string[]
+        error?: string
+        details?: string
+      }
+      if (!importRes.ok) {
+        const parts = [
+          importData.error ?? 'Error al importar desglose',
+          importData.details,
+        ].filter(Boolean)
+        setError(parts.join(' · '))
+        setLoading(false)
+        return
+      }
+      const { inserted = 0, skipped = 0, errors: importErrors = [] } = importData
 
       setCreated(inserted)
       router.refresh()
       if (inserted > 0) {
+        if (importErrors?.length) {
+          setError(
+            `Se crearon ${inserted} escenas. Algunos avisos: ${importErrors.slice(0, 3).join('; ')}${importErrors.length > 3 ? '...' : ''}`
+          )
+        }
         setTimeout(() => {
           setOpen(false)
           setText('')
@@ -145,7 +181,11 @@ export function ImportScriptDialog({
           `${skipped} escena${skipped !== 1 ? 's' : ''} ya existían. No se duplicaron. Cierra y revisa el desglose.`
         )
       } else {
-        setError('No se pudieron crear escenas en la base de datos.')
+        setError(
+          importErrors?.length
+            ? `No se crearon escenas. ${importErrors.slice(0, 2).join(' ')}`
+            : 'No se pudieron crear escenas en la base de datos.'
+        )
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de conexión')
@@ -209,10 +249,48 @@ export function ImportScriptDialog({
             disabled={loading}
             rows={6}
           />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useGpt4}
+              onChange={(e) => setUseGpt4(e.target.checked)}
+              disabled={loading}
+              className="rounded border-input"
+            />
+            <span className="text-sm">Usar GPT-4 (más preciso, más lento y costoso)</span>
+          </label>
           <p className="text-xs text-muted-foreground">
             <code className="rounded bg-muted px-1">OPENAI_API_KEY</code> en
-            .env.local (GPT-4o-mini).
+            .env.local (GPT-4o-mini por defecto; GPT-4o si marcas la opción).
           </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              disabled={loading}
+              onClick={async () => {
+                setOpenaiCheck(null)
+                try {
+                  const r = await fetch('/api/health/openai')
+                  const d = await r.json()
+                  if (d.ok) {
+                    setOpenaiCheck(`OK. Tokens usados: ${d.usage?.total_tokens ?? '—'}. Debería aparecer en Usage de OpenAI.`)
+                  } else {
+                    setOpenaiCheck(`Error: ${d.error ?? d.details ?? 'sin detalles'}. ${d.hint ?? ''}`)
+                  }
+                } catch (e) {
+                  setOpenaiCheck(`No se pudo conectar: ${e instanceof Error ? e.message : String(e)}. ¿Servidor en marcha (npm run dev)?`)
+                }
+              }}
+            >
+              Comprobar OpenAI
+            </Button>
+            {openaiCheck && (
+              <span className="text-xs text-muted-foreground">{openaiCheck}</span>
+            )}
+          </div>
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
