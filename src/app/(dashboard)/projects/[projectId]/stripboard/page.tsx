@@ -12,6 +12,9 @@ export default async function StripboardPage({
 }: {
   params: Promise<{ projectId: string }>
 }) {
+  const PLACEHOLDER_CAST_NAME = 'Personaje (revisar)'
+  const PLACEHOLDER_CAST_NAME_LOWER = PLACEHOLDER_CAST_NAME.toLowerCase()
+
   const { projectId } = await params
   const supabase = await createClient()
   const { data: project, error: projectError } = await supabase
@@ -58,6 +61,7 @@ export default async function StripboardPage({
     const name = (cm.character_name ?? '').trim()
     if (name && cm.cast_number != null) {
       const key = name.toLowerCase()
+      if (key === PLACEHOLDER_CAST_NAME_LOWER) continue
       nameToCastNumber.set(key, cm.cast_number)
       const baseKey = key.replace(/\s*\(\d+\)\s*$/, '').trim()
       if (baseKey && baseKey !== key) nameToCastNumber.set(baseKey, cm.cast_number)
@@ -79,13 +83,24 @@ export default async function StripboardPage({
           : null
 
     const sceneCastRows = scene.scene_cast ?? []
-    const allCastNumbers = sceneCastRows.flatMap((c: { cast_members?: { cast_number?: number } | { cast_number?: number }[] }) => {
-      const m = c.cast_members
-      if (Array.isArray(m)) return m.map((x) => x?.cast_number).filter((n): n is number => n != null)
-      return m?.cast_number != null ? [m.cast_number] : []
-    })
-    let castNumbers = allCastNumbers.filter((n) => n < 100)
-    const stuntNumbers = allCastNumbers.filter((n) => n >= 100)
+    const allCast = sceneCastRows.flatMap(
+      (c: {
+        cast_members?:
+          | { cast_number?: number; character_name?: string }
+          | { cast_number?: number; character_name?: string }[]
+      }) => {
+        const m = c.cast_members
+        if (Array.isArray(m)) return m.map((x) => ({ cast_number: x?.cast_number, character_name: x?.character_name }))
+        return m?.cast_number != null ? [{ cast_number: m.cast_number, character_name: m.character_name }] : []
+      }
+    )
+    const castNumbersAll = allCast
+      .filter((x) => (x.character_name ?? '').trim().toLowerCase() !== PLACEHOLDER_CAST_NAME_LOWER)
+      .map((x) => x.cast_number)
+      .filter((n): n is number => n != null)
+
+    let castNumbers = castNumbersAll.filter((n) => n < 100)
+    const stuntNumbers = castNumbersAll.filter((n) => n >= 100)
 
     const sceneElsRaw = scene.scene_elements ?? []
     const sceneEls = Array.isArray(sceneElsRaw) ? sceneElsRaw : []
@@ -95,6 +110,7 @@ export default async function StripboardPage({
       .map(getBe)
       .filter((be): be is { name: string; category: string } => be?.category === 'cast' && !!be?.name)
       .map((be) => be.name)
+      .filter((name) => name.trim().toLowerCase() !== PLACEHOLDER_CAST_NAME_LOWER)
     const castNames = castFromElements.length > 0 ? castFromElements : undefined
 
     if (castNumbers.length === 0 && castFromElements.length > 0) {

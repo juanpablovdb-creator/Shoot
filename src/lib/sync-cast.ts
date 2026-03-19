@@ -32,6 +32,8 @@ export async function getSceneCastBreakdown(
   supabase: Supabase,
   projectId: string
 ): Promise<{ scene_number: string; scene_id: string; cast_names: string[] }[]> {
+  const PLACEHOLDER_CAST_NAME = 'Personaje (revisar)'
+  const PLACEHOLDER_CAST_NAME_LOWER = PLACEHOLDER_CAST_NAME.toLowerCase()
   const { data: scenes } = await supabase
     .from('scenes')
     .select('id, scene_number')
@@ -68,6 +70,8 @@ export async function getSceneCastBreakdown(
     for (const r of rows ?? []) {
       const name = nameById.get(r.element_id)
       if (name && castNamesBySceneId[r.scene_id]) {
+        // Si el parse no infiere cast, inserta un placeholder. No debe contar como cast real.
+        if (name.toLowerCase() === PLACEHOLDER_CAST_NAME_LOWER) continue
         if (!castNamesBySceneId[r.scene_id].includes(name)) {
           castNamesBySceneId[r.scene_id].push(name)
         }
@@ -91,6 +95,7 @@ export async function getCastFromBreakdown(
   supabase: Supabase,
   projectId: string
 ): Promise<CastMemberRow[]> {
+  const PLACEHOLDER_CAST_NAME = 'Personaje (revisar)'
   const { data: castMembers } = await supabase
     .from('cast_members')
     .select('id, character_name')
@@ -107,6 +112,10 @@ export async function getCastFromBreakdown(
   }
   const grouped: { id: string; character_name: string; memberIds: string[]; baseKey: string }[] = []
   for (const [baseKey, members] of byBaseKey) {
+    // Nunca mostrar ni contar el placeholder como si fuera un personaje real.
+    // Nota: el placeholder no sigue el formato "Nombre (NN)" de edad, así que baseName() lo deja intacto.
+    const anyName = members[0]?.character_name ?? ''
+    if (anyName.trim().toLowerCase() === PLACEHOLDER_CAST_NAME.toLowerCase()) continue
     const canonical = members.reduce((a, b) =>
       a.character_name.length <= b.character_name.length ? a : b
     )
@@ -162,6 +171,8 @@ export async function syncCastFromBreakdown(
   supabase: Supabase,
   projectId: string
 ): Promise<{ castMembers: CastMemberRow[]; synced: number }> {
+  const PLACEHOLDER_CAST_NAME = 'Personaje (revisar)'
+  const PLACEHOLDER_CAST_NAME_LOWER = PLACEHOLDER_CAST_NAME.toLowerCase()
   const { data: castElements } = await supabase
     .from('breakdown_elements')
     .select('id, name')
@@ -188,7 +199,9 @@ export async function syncCastFromBreakdown(
         .in('element_id', castIds)
       for (const r of seRows ?? []) {
         const name = nameById.get(r.element_id)
-        if (name) pairs.push({ scene_id: r.scene_id, character_name: name })
+        if (name && name.toLowerCase() !== PLACEHOLDER_CAST_NAME_LOWER) {
+          pairs.push({ scene_id: r.scene_id, character_name: name })
+        }
       }
     }
   }
