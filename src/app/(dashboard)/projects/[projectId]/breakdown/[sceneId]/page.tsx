@@ -75,6 +75,9 @@ export default async function SceneBreakdownPage({
     if (base) castAppearanceCountsByName[base] = c.appearance_count ?? 0
   }
 
+  const scriptPageRaw = opt('script_page')
+  const scriptDayRaw = opt('script_day')
+
   const locationName = undefined
 
   return (
@@ -104,8 +107,8 @@ export default async function SceneBreakdownPage({
             location_name: locationName,
             synopsis: scene.synopsis ?? undefined,
             page_eighths: scene.page_eighths,
-            script_page: typeof opt('script_page') === 'number' ? opt('script_page') : undefined,
-            script_day: typeof opt('script_day') === 'number' ? opt('script_day') : undefined,
+            script_page: typeof scriptPageRaw === 'number' ? scriptPageRaw : undefined,
+            script_day: typeof scriptDayRaw === 'number' ? scriptDayRaw : undefined,
             unit: opt('unit') != null ? String(opt('unit')) : undefined,
             sequence: opt('sequence') != null ? String(opt('sequence')) : undefined,
             location: opt('location') != null ? String(opt('location')) : undefined,
