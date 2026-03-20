@@ -2,7 +2,10 @@
 
 import { getStripColor } from '@/lib/constants/strip-colors'
 import { STRIP_COLORS } from '@/lib/constants/strip-colors'
-import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
+import {
+  BREAKDOWN_CATEGORIES,
+  BREAKDOWN_CATEGORY_ORDER,
+} from '@/lib/constants/categories'
 import { formatEighthsOctavosOnly } from '@/lib/utils/eighths'
 import type { IntExt, DayNight } from '@/types'
 import { cn } from '@/lib/utils'
@@ -35,14 +38,13 @@ interface SceneCardProps {
   onClick?: () => void
 }
 
-function groupElementsByCategory(elements: SceneElementItem[]) {
-  const byCat: Record<string, string[]> = {}
+function groupElementsByCategoryKey(elements: SceneElementItem[]) {
+  const byCat: Partial<Record<BreakdownCategoryKey, string[]>> = {}
   for (const e of elements) {
     if (!e.breakdown_elements?.name) continue
-    const cat = e.breakdown_elements.category
-    const label = BREAKDOWN_CATEGORIES[cat]?.label ?? cat
-    if (!byCat[label]) byCat[label] = []
-    byCat[label].push(e.breakdown_elements.name)
+    const cat = e.breakdown_elements.category as BreakdownCategoryKey
+    if (!byCat[cat]) byCat[cat] = []
+    byCat[cat]!.push(e.breakdown_elements.name)
   }
   return byCat
 }
@@ -68,7 +70,7 @@ export function SceneCard({
 }: SceneCardProps) {
   const colorKey = getStripColor(intExt, dayNight)
   const stripStyle = STRIP_COLORS[colorKey]
-  const elementsByCategory = groupElementsByCategory(elements)
+  const elementsByCategory = groupElementsByCategoryKey(elements)
   const castList = castEntries ?? castNumbers.map((n) => ({ cast_number: n, character_name: '' }))
   const hasCast = castList.length > 0
 
@@ -153,11 +155,15 @@ export function SceneCard({
           )}
 
           {/* Elementos por categoría (formato Breakdown Sheet) */}
-          {Object.keys(elementsByCategory).length > 0 && (
+          {BREAKDOWN_CATEGORY_ORDER.some((k) => elementsByCategory[k]?.length) && (
             <div className="mt-3 border-t border-border pt-2">
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
-                {Object.entries(elementsByCategory).map(([label, names]) => (
-                  <div key={label} className="flex flex-wrap items-baseline gap-1">
+                {BREAKDOWN_CATEGORY_ORDER.filter((k) => elementsByCategory[k]?.length).map(
+                  (key) => {
+                    const names = elementsByCategory[key]!
+                    const label = BREAKDOWN_CATEGORIES[key]?.label ?? key
+                    return (
+                  <div key={key} className="flex flex-wrap items-baseline gap-1">
                     <span className="font-medium text-muted-foreground">
                       {label}:
                     </span>
@@ -166,7 +172,9 @@ export function SceneCard({
                       {names.length > 3 ? ` (+${names.length - 3})` : ''}
                     </span>
                   </div>
-                ))}
+                    )
+                  }
+                )}
               </div>
             </div>
           )}

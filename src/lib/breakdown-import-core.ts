@@ -4,7 +4,11 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BreakdownCategoryKey } from '@/types'
+import { BREAKDOWN_CATEGORY_KEYS } from '@/lib/constants/categories'
+import { normalizeBreakdownCategory } from '@/lib/breakdown-category'
 import { inferCastFromSynopsis } from '@/lib/infer-cast-from-synopsis'
+
+const VALID_BREAKDOWN_CATEGORIES = new Set<string>(BREAKDOWN_CATEGORY_KEYS)
 
 const DEFAULT_LOCATION_NAME = 'Locaciones del guion'
 const EIGHTHS_PER_PAGE = 8
@@ -230,10 +234,16 @@ export async function createScenesFromParsedCore(
     nextSort++
 
     for (const el of elements) {
-      const catRaw = String(el.category ?? '').trim().toLowerCase()
-      const cat = (catRaw === 'cast' ? 'cast' : catRaw) as BreakdownCategoryKey
+      const catRaw = String(el.category ?? '').trim()
+      const cat = normalizeBreakdownCategory(catRaw, VALID_BREAKDOWN_CATEGORIES)
       const name = el.name.slice(0, 500)
       if (!name) continue
+      if (!cat) {
+        errors.push(
+          `Escena ${sceneNumber} — categoría no reconocida "${catRaw}" en "${name.slice(0, 80)}" (omítelo o usa una clave válida).`
+        )
+        continue
+      }
 
       const { data: existingEl } = await supabase
         .from('breakdown_elements')

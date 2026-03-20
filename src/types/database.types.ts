@@ -12,32 +12,27 @@ export type ProjectType =
 export type IntExt = 'INT' | 'EXT'
 export type DayNight = 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER'
 
+/** Categorías de desglose alineadas a Movie Magic (hoja por escena + reportes DOODS). */
 export type BreakdownCategoryKey =
   | 'cast'
-  | 'figurantes'
   | 'extras'
   | 'stunts'
   | 'spfx'
   | 'vfx'
   | 'armas'
   | 'animales'
-  | 'coordinacion_intimidad'
   | 'vehiculos'
+  | 'coordinacion_intimidad'
   | 'utileria'
   | 'vestuario'
-  | 'maquillaje'
+  | 'maq_pelo'
+  | 'maq_fx'
   | 'arte'
-  | 'grafica_archivo'
-  | 'musica'
   | 'fotografia'
   | 'sonido'
   | 'fotografias'
-  | 'produccion'
-  | 'notes'
-  | 'coreografia_baile'
+  | 'musica'
   | 'observaciones'
-  | 'maq_pelo'
-  | 'maq_fx'
 
 export interface Project {
   id: string

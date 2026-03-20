@@ -34,19 +34,20 @@ En CADA escena debes listar en elements TODOS los personajes que:
 Usa category "cast" y name con el nombre del personaje tal como en el guion. Si el guion indica edad (ej. "Abuelo (74)"), puedes usar "Abuelo (74)" como name para referencia; si no, "Abuelo". La consistencia de nombres entre escenas permite calcular bien la cantidad de apariciones por personaje. No omitas a nadie: un desglose sin cast completo no sirve para producción.
 IMPORTANTE: El protagonista o personaje principal es el que MÁS escenas tiene (más apariciones). Inclúyelo en elements en TODAS las escenas donde aparezca o hable. El sistema ordena el cast por cantidad de apariciones (1 = el que más sale); si el protagonista no está en todas sus escenas, quedará mal ordenado.
 
-CATEGORÍAS PERMITIDAS (claves exactas en minúsculas): [la app inyecta aquí la lista: cast, figurantes, stunts, spfx, vfx, utileria, vestuario, etc.]
+CATEGORÍAS PERMITIDAS (claves exactas en minúsculas): [la app inyecta `BREAKDOWN_CATEGORY_KEYS`: cast, extras, stunts, spfx, vfx, armas, animales, vehiculos, coordinacion_intimidad, utileria, vestuario, maq_pelo, maq_fx, arte, fotografia, sonido, fotografias, musica, observaciones]
 
 ELEMENTOS POR CATEGORÍA (sé exhaustivo):
 - cast: siempre al menos los personajes que salen/hablan en la escena.
-- figurantes, extras: cuando se indiquen o se infieran (ej. "restaurante lleno", "gente en la calle").
+- extras: figuración, bits y atmósfera (ej. "restaurante lleno", "gente en la calle"); cantidad en el name si aplica.
 - stunts: peleas, caídas, persecuciones, acción física, conducción extrema.
 - spfx: efectos prácticos (humo, lluvia, fuego práctico, sangre, explosiones prácticas).
 - vfx: efectos digitales, pantalla verde, CGI, composición.
-- utileria: objetos que se usan o se ven (teléfono, taza, armas de utilería, etc.).
-- vestuario, maquillaje, arte: cuando sean relevantes o se mencionen.
+- utileria: objetos que se usan o se ven (teléfono, taza, etc.).
+- vestuario, maq_pelo, maq_fx, arte: cuando sean relevantes o se mencionen.
 - vehiculos, armas, animales: si aparecen o se mencionen.
 - coordinacion_intimidad: escenas de intimidad que requieran coordinación.
-- musica, grafica_archivo: cuando se indiquen.
+- fotografia, sonido, fotografias, musica: equipo/cámara, sonido directo, fotos como objeto en escena, música diegética.
+- observaciones: notas de producción que no encajen en otra categoría.
 
 UNA ESCENA = UNA CABECERA (INT/EXT + LOCACIÓN + DÍA/NOCHE). Si cambia locación o momento, es otra escena. Cortes dentro del mismo lugar pueden ser una sola escena con varios elements.
 

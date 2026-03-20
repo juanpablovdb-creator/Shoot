@@ -6,7 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
+import {
+  BREAKDOWN_CATEGORIES,
+  BREAKDOWN_CATEGORY_ORDER,
+} from '@/lib/constants/categories'
 import type { BreakdownCategoryKey, IntExt, DayNight } from '@/types'
 
 const INT_EXT: IntExt[] = ['INT', 'EXT']
@@ -383,9 +386,11 @@ export function SceneBreakdownSheet({
             Elementos
           </h3>
           <div className="max-h-[500px] space-y-4 overflow-y-auto">
-            {Object.entries(BREAKDOWN_CATEGORIES)
-              .filter(([key]) => elementsByCategory[key]?.length > 0)
-              .map(([key, config]) => (
+            {BREAKDOWN_CATEGORY_ORDER.filter(
+              (key) => elementsByCategory[key]?.length
+            ).map((key) => {
+              const config = BREAKDOWN_CATEGORIES[key]
+              return (
                 <div key={key}>
                   <h4 className="text-xs font-medium text-muted-foreground">
                     {config.label}
@@ -423,7 +428,8 @@ export function SceneBreakdownSheet({
                     ))}
                   </ul>
                 </div>
-              ))}
+              )
+            })}
             {elements.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 No hay elementos en esta escena. Añade desde el panel derecho.
@@ -512,9 +518,9 @@ function AddElementForm({
           }
           className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
         >
-          {Object.entries(BREAKDOWN_CATEGORIES).map(([key, config]) => (
+          {BREAKDOWN_CATEGORY_ORDER.map((key) => (
             <option key={key} value={key}>
-              {config.label}
+              {BREAKDOWN_CATEGORIES[key].label}
             </option>
           ))}
         </select>

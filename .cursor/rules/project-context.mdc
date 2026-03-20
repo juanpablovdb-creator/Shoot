@@ -17,7 +17,7 @@ Plataforma para producciones audiovisuales (películas y series), tipo Movie Mag
 
 ## Base de datos (Supabase)
 
-Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_members`, `locations`, `sets`, `breakdown_elements` (17 categorías), `production_calendars`, `shooting_days`, `stripboard_strips`, `dood_entries`. RLS y triggers ya definidos en el schema.
+Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_members`, `locations`, `sets`, `breakdown_elements` (categorías canónicas tipo Movie Magic: cast, extras, stunts, SPFX, VFX, armas, animales, vehículos, coord. intimidad, utilería, vestuario, maq/pelo, maq FX, arte, fotografía, sonido, fotografías, música, observaciones), `production_calendars`, `shooting_days`, `stripboard_strips`, `dood_entries`. RLS y triggers ya definidos en el schema.
 
 ## Reglas de negocio
 

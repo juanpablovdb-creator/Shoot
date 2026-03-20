@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import type { BreakdownCategoryKey } from '@/types'
 import { BREAKDOWN_CATEGORY_KEYS } from '@/lib/constants/categories'
+import { normalizeBreakdownCategory } from '@/lib/breakdown-category'
 import { inferCastFromSynopsis } from '@/lib/infer-cast-from-synopsis'
 
 const VALID_CATEGORIES = new Set<string>(BREAKDOWN_CATEGORY_KEYS)
@@ -105,22 +105,22 @@ En CADA escena lista en elements TODOS los personajes que: aparecen en escena (a
 - CONSISTENCIA: el mismo personaje debe llevar el MISMO nombre en todas las escenas (ej. siempre "Pacho Martínez", no "Pacho" en una y "Pacho Martínez" en otra). Así el sistema cuenta apariciones y asigna número (1 = el que más sale). No omitas a nadie; el protagonista debe estar en elements en TODAS sus escenas.
 
 EXTRAS Y CANTIDADES:
-- figurantes, extras: cuando se indiquen o infieran (ej. "restaurante lleno", "escritores del diario"). Si el guion indica CANTIDAD, inclúyela en el name entre paréntesis: "Escritores Diario el Caribe (20)" para 20 extras.
+- extras: figuración, bits y atmósfera (ej. "restaurante lleno", "escritores del diario"). Si el guion indica CANTIDAD, inclúyela en el name entre paréntesis: "Escritores Diario el Caribe (20)".
 
 CATEGORÍAS PERMITIDAS (claves exactas en minúsculas): ${categoriesList}
 
 USO POR CATEGORÍA (sé exhaustivo):
 - cast: siempre en cada escena (al menos los que aparecen/hablan).
-- figurantes, extras: cuando aplique; cantidad en name si se conoce.
+- extras: cuando aplique; cantidad en name si se conoce.
 - stunts: acción física, peleas, caídas, persecuciones, conducción extrema.
 - spfx: efectos prácticos (humo, lluvia, fuego, sangre, explosiones prácticas).
 - vfx: efectos digitales, pantalla verde, CGI.
 - utileria: objetos que se usan o se ven (premios en estantes, fotografías en oficina, teléfono, taza, etc.).
-- vestuario, maquillaje, maq_pelo, maq_fx, arte: cuando sean relevantes o se mencionen.
+- vestuario, maq_pelo, maq_fx, arte: cuando sean relevantes o se mencionen (maquillaje general → maq_pelo; FX de caracterización → maq_fx).
 - vehiculos, armas, animales: si aparecen o se mencionan.
 - coordinacion_intimidad: escenas de intimidad que requieran coordinación.
-- fotografia, sonido, musica, grafica_archivo, fotografias: cuando se indiquen o sean relevantes.
-- produccion, notes, coreografia_baile, observaciones: notas o ítems específicos de la escena.
+- fotografia, sonido, musica, fotografias: cámara, sonido directo, música diegética, fotos/ref. en utilería o arte (fotografías = imágenes como objeto en escena).
+- observaciones: notas de producción que no encajen en otra categoría.
 
 UNA ESCENA = UNA CABECERA. Si cambia locación o momento, es otra escena. Cortes dentro del mismo lugar y momento pueden ser una sola escena con varios elements.
 
@@ -201,23 +201,16 @@ Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}. Cada escena con todos los
     }
     console.log('[parse-script] OpenAI OK, escenas recibidas:', parsed.scenes.length, 'usage:', data.usage?.total_tokens ?? '?')
 
-    const CAT_ALIASES: Record<string, BreakdownCategoryKey> = {
-      personajes: 'cast',
-      characters: 'cast',
-    }
     // Normalizar categorías y filtrar elementos inválidos
     let scenes = parsed.scenes.map((s: unknown) => {
       const scene = s as Record<string, unknown>
       const elements = Array.isArray(scene.elements)
         ? (scene.elements as Array<{ category?: string; name?: string }>)
             .map((el) => {
-              let cat = String(el?.category ?? '').toLowerCase().trim()
+              const catRaw = String(el?.category ?? '')
               const name = String(el?.name ?? '').trim()
               if (!name) return null
-              if (CAT_ALIASES[cat]) cat = CAT_ALIASES[cat]
-              const validCat: BreakdownCategoryKey | null = VALID_CATEGORIES.has(cat)
-                ? (cat as BreakdownCategoryKey)
-                : null
+              const validCat = normalizeBreakdownCategory(catRaw, VALID_CATEGORIES)
               if (!validCat) return null
               return { category: validCat, name }
             })
