@@ -1,10 +1,29 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/shared/Sidebar'
 
-export default function DashboardLayout({
+/** Evita mostrar el shell del dashboard sin sesión (p. ej. si el middleware no corre por env). */
+export const dynamic = 'force-dynamic'
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) {
+    redirect('/login')
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
