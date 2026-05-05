@@ -1,9 +1,11 @@
 import { PageHeader } from '@/components/shared/PageHeader'
 import { BreakdownSheet } from '@/components/breakdown/BreakdownSheet'
 import type { BreakdownSheetProps } from '@/components/breakdown/BreakdownSheet'
+import { ProductionComplexityBanner } from '@/components/breakdown/ProductionComplexityBanner'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { getCastFromBreakdown, syncCastFromBreakdown } from '@/lib/sync-cast'
+import { countScenesByFxCategories } from '@/lib/scene-fx-from-elements'
 
 export default async function BreakdownPage({
   params,
@@ -48,6 +50,7 @@ export default async function BreakdownPage({
   ])
 
   const scenes = scenesResult.data ?? []
+  const { stuntScenes, sfxScenes, vfxScenes } = countScenesByFxCategories(scenes)
   // Por nombre base (ej. "Abuelo" y "Abuelo (74)" → mismo personaje) para mostrar apariciones en el desglose
   const castAppearanceCountsByName: Record<string, number> = {}
   const castByBaseName: Record<string, { cast_number: number; character_name: string }> = {}
@@ -66,8 +69,16 @@ export default async function BreakdownPage({
     <>
       <PageHeader
         title="Desglose"
-        description="Escenas y elementos del proyecto"
+        description="Escenas y elementos del proyecto. Exportaciones: CSV del desglose y del cast enlazados abajo."
       />
+      <div className="mt-4">
+        <ProductionComplexityBanner
+          totalScenes={scenes.length}
+          stuntScenes={stuntScenes}
+          sfxScenes={sfxScenes}
+          vfxScenes={vfxScenes}
+        />
+      </div>
       <div className="mt-6">
         <BreakdownSheet
           projectId={projectId}

@@ -41,7 +41,6 @@ export function ScriptSection({
   const [extracting, setExtracting] = useState(false)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
   const [rehacerLoading, setRehacerLoading] = useState(false)
-  const [useGpt4, setUseGpt4] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const hasPdf = Boolean(initialScriptFilePath)
@@ -137,7 +136,7 @@ export function ScriptSection({
       const parseRes = await fetch('/api/parse-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, projectId, useGpt4 }),
+        body: JSON.stringify({ text, projectId }),
       })
       const parseData = (await parseRes.json()) as {
         scenes?: ParsedScene[]
@@ -220,7 +219,7 @@ export function ScriptSection({
       const parseRes = await fetch('/api/parse-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, projectId, useGpt4 }),
+        body: JSON.stringify({ text, projectId }),
       })
       const parseData = (await parseRes.json()) as { scenes?: ParsedScene[]; error?: string; details?: string; hint?: string }
       if (!parseRes.ok) {
@@ -326,16 +325,6 @@ export function ScriptSection({
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useGpt4}
-                    onChange={(e) => setUseGpt4(e.target.checked)}
-                    disabled={extracting || rehacerLoading}
-                    className="rounded border-input"
-                  />
-                  <span className="text-xs text-muted-foreground">Usar GPT-4</span>
-                </label>
                 <Button
                   type="button"
                   variant="outline"

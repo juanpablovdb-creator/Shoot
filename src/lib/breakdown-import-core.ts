@@ -252,7 +252,7 @@ export async function createScenesFromParsedCore(
         .eq('category', cat)
         .eq('name', name)
         .limit(1)
-        .single()
+        .maybeSingle()
 
       let elementId = existingEl?.id
       if (!elementId) {

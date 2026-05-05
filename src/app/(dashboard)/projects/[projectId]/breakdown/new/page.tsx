@@ -37,6 +37,7 @@ export default function NewScenePage() {
   const [intExt, setIntExt] = useState<IntExt>('INT')
   const [dayNight, setDayNight] = useState<DayNight>('DÍA')
   const [synopsis, setSynopsis] = useState('')
+  const [setName, setSetName] = useState('')
   const [pageEighths, setPageEighths] = useState(8)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +54,7 @@ export default function NewScenePage() {
       .eq('project_id', projectId)
       .order('scene_number_sort', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     const nextSort = (existing?.scene_number_sort ?? 0) + 1
 
@@ -66,6 +67,7 @@ export default function NewScenePage() {
         int_ext: intExt,
         day_night: dayNight,
         synopsis: synopsis || null,
+        set_name: setName.trim() || 'Sin especificar',
         page_eighths: pageEighths,
         has_stunts: false,
         has_sfx: false,
@@ -153,6 +155,18 @@ export default function NewScenePage() {
                 onChange={(e) => setSynopsis(e.target.value)}
                 placeholder="Breve descripción de la escena"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="setName">Set / espacio (opcional)</Label>
+              <Input
+                id="setName"
+                value={setName}
+                onChange={(e) => setSetName(e.target.value)}
+                placeholder="Ej: Sala · Cocina · Calle principal"
+              />
+              <p className="text-xs text-muted-foreground">
+                Si lo dejas vacío se usará &quot;Sin especificar&quot; (requerido en base de datos).
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="pageEighths">Páginas (en octavos)</Label>

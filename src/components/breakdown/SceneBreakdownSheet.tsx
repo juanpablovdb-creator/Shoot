@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
@@ -71,6 +71,19 @@ export function SceneBreakdownSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Atajos: ESC vuelve al listado de desglose.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      // Si hay un modal/dialog activo, dejar que lo maneje primero.
+      // (Base UI/Next overlays suelen capturar ESC.)
+      router.push(`/projects/${projectId}/breakdown`)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [router, projectId])
+
   const [scene_number, setSceneNumber] = useState(initialScene.scene_number)
   const [int_ext, setIntExt] = useState<IntExt>(initialScene.int_ext)
   const [day_night, setDayNight] = useState<DayNight>(initialScene.day_night)
@@ -99,7 +112,7 @@ export function SceneBreakdownSheet({
         scene_number,
         int_ext,
         day_night,
-        set_name: set_name || null,
+        set_name: set_name.trim() || 'Sin especificar',
         synopsis: synopsis || null,
         page_eighths: Number(page_eighths) || 8,
         script_page: script_page ? Number(script_page) : null,
@@ -144,6 +157,7 @@ export function SceneBreakdownSheet({
   const removeElement = useCallback(
     async (sceneElementId: string) => {
       const supabase = createClient()
+      const nextEls = elements.filter((e) => e.id !== sceneElementId)
       const { error: err } = await supabase
         .from('scene_elements')
         .delete()
@@ -153,10 +167,18 @@ export function SceneBreakdownSheet({
         setError(err.message)
         return
       }
-      setElements((prev) => prev.filter((e) => e.id !== sceneElementId))
+      const hasStunts = nextEls.some((e) => e.category === 'stunts')
+      const hasSfx = nextEls.some((e) => e.category === 'spfx')
+      const hasVfx = nextEls.some((e) => e.category === 'vfx')
+      await supabase
+        .from('scenes')
+        .update({ has_stunts: hasStunts, has_sfx: hasSfx, has_vfx: hasVfx })
+        .eq('id', sceneId)
+        .eq('project_id', projectId)
+      setElements(nextEls)
       router.refresh()
     },
-    [sceneId, router]
+    [sceneId, projectId, router, elements]
   )
 
   const addElement = useCallback(
@@ -164,6 +186,15 @@ export function SceneBreakdownSheet({
       if (!name.trim()) return
       const supabase = createClient()
       const trimmedName = name.trim().slice(0, 500)
+
+      const duplicateOnScene = elements.some(
+        (e) =>
+          e.category === category && e.name.trim().toLowerCase() === trimmedName.toLowerCase()
+      )
+      if (duplicateOnScene) {
+        setError('Este elemento ya está en esta escena (misma categoría y nombre).')
+        return
+      }
 
       const { data: existing } = await supabase
         .from('breakdown_elements')
@@ -175,6 +206,25 @@ export function SceneBreakdownSheet({
         .maybeSingle()
 
       let elementId = existing?.id
+      const reusingProjectElement = Boolean(elementId)
+      if (reusingProjectElement) {
+        const alreadyLinked = elements.some((e) => e.element_id === elementId)
+        if (alreadyLinked) {
+          setError('Este elemento del proyecto ya está vinculado a la escena.')
+          return
+        }
+        // Cast se reutiliza en casi todas las escenas; sin confirm extra.
+        if (
+          category !== 'cast' &&
+          typeof window !== 'undefined' &&
+          !window.confirm(
+            'Ya existe en el proyecto un elemento con este nombre y categoría. Se reutilizará el mismo registro (evita duplicados en la lista maestra). ¿Vincularlo a esta escena?'
+          )
+        ) {
+          return
+        }
+      }
+
       if (!elementId) {
         const { data: newEl, error: insErr } = await supabase
           .from('breakdown_elements')
@@ -198,6 +248,17 @@ export function SceneBreakdownSheet({
         setError(seErr.message)
         return
       }
+
+      const hasStunts =
+        category === 'stunts' || elements.some((e) => e.category === 'stunts')
+      const hasSfx = category === 'spfx' || elements.some((e) => e.category === 'spfx')
+      const hasVfx = category === 'vfx' || elements.some((e) => e.category === 'vfx')
+      await supabase
+        .from('scenes')
+        .update({ has_stunts: hasStunts, has_sfx: hasSfx, has_vfx: hasVfx })
+        .eq('id', sceneId)
+        .eq('project_id', projectId)
+
       setElements((prev) =>
         prev.concat({
           id: newSe!.id,
@@ -208,7 +269,7 @@ export function SceneBreakdownSheet({
       )
       router.refresh()
     },
-    [projectId, sceneId, router]
+    [projectId, sceneId, router, elements]
   )
 
   const elementsByCategory = elements.reduce<Record<string, SceneElementRow[]>>(
@@ -524,6 +585,11 @@ function AddElementForm({
             </option>
           ))}
         </select>
+        {(category === 'extras' || category === 'figuracion') && (
+          <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+            Extras = multitudes/atmósfera. Figuración = bits con función (mesero, taxista…).
+          </p>
+        )}
       </div>
       <div>
         <Label className="text-xs text-muted-foreground">Nombre</Label>

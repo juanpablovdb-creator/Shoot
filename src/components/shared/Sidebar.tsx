@@ -19,8 +19,9 @@ import { useEffect, useState } from 'react'
 const nav = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
   { href: '/projects', label: 'Proyectos', icon: FolderKanban },
-  { href: '/settings', label: 'Configuración', icon: Settings },
 ]
+
+const bottomNav = { href: '/settings', label: 'Configuración', icon: Settings }
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -75,6 +76,26 @@ export function Sidebar() {
         })}
       </nav>
       <div className="border-t border-sidebar-border p-3">
+        {(() => {
+          const Icon = bottomNav.icon
+          const isActive =
+            pathname === bottomNav.href ||
+            (bottomNav.href !== '/' && pathname.startsWith(bottomNav.href))
+          return (
+            <Link
+              href={bottomNav.href}
+              className={cn(
+                'mb-3 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+              )}
+            >
+              <Icon className="size-[1.125rem] shrink-0" />
+              {bottomNav.label}
+            </Link>
+          )
+        })()}
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-sidebar-foreground/70">
             Tema

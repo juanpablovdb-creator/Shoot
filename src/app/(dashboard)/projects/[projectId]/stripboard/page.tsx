@@ -1,11 +1,16 @@
+import Link from 'next/link'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { StripboardView } from '@/components/stripboard/StripboardView'
 import type { StripRowData } from '@/components/stripboard/StripRow'
 import { syncCastFromBreakdown } from '@/lib/sync-cast'
+import { sceneHasFxCategory } from '@/lib/scene-fx-from-elements'
 
 export const dynamic = 'force-dynamic'
+
+const outlineLinkClass =
+  'inline-flex h-9 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/20 hover:bg-muted/50'
 
 export default async function StripboardPage({
   params,
@@ -134,9 +139,9 @@ export default async function StripboardPage({
       specificLocation: specificLocation ?? null,
       synopsis: scene.synopsis ?? null,
       page_eighths: scene.page_eighths,
-      has_stunts: scene.has_stunts,
-      has_sfx: scene.has_sfx,
-      has_vfx: scene.has_vfx,
+      has_stunts: sceneHasFxCategory(scene.scene_elements, 'stunts', scene.has_stunts),
+      has_sfx: sceneHasFxCategory(scene.scene_elements, 'spfx', scene.has_sfx),
+      has_vfx: sceneHasFxCategory(scene.scene_elements, 'vfx', scene.has_vfx),
       castNumbers,
       stuntNumbers,
       castNames,
@@ -147,7 +152,23 @@ export default async function StripboardPage({
     <>
       <PageHeader
         title="Stripboard"
-        description="Franjas por escena (INT/EXT, DÍA/NOCHE). Ordena por escena o por set."
+        description="Franjas por escena (INT/EXT, DÍA/NOCHE). Clic en una fila abre el desglose de esa escena."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/projects/${projectId}/breakdown`}
+              className={outlineLinkClass}
+            >
+              Desglose
+            </Link>
+            <Link
+              href={`/projects/${projectId}/elements`}
+              className={outlineLinkClass}
+            >
+              Elementos
+            </Link>
+          </div>
+        }
       />
       <div className="mt-6">
         <StripboardView

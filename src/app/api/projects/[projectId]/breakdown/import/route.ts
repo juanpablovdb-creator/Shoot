@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createScenesFromParsedCore, type ParsedScene } from '@/lib/breakdown-import-core'
 import { syncCastFromBreakdown } from '@/lib/sync-cast'
 
+const FREE_PLAN_MAX_SCRIPTS_IN_PLAN = 3
+
 /**
  * POST /api/projects/[projectId]/breakdown/import
  *
@@ -35,6 +37,36 @@ export async function POST(
       .single()
     if (!project) {
       return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+    }
+
+    // Plan Free: máximo 3 guiones "en tu plan" (proyectos con al menos 1 escena).
+    // Solo bloquea cuando este proyecto aún no tiene escenas (o sea: cuando está "entrando" al plan).
+    const { count: existingScenesCount } = await supabase
+      .from('scenes')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+
+    if ((existingScenesCount ?? 0) === 0) {
+      const { data: sceneProjects } = await supabase
+        .from('scenes')
+        .select('project_id, projects!inner(user_id)')
+        .eq('projects.user_id', user.id)
+
+      const distinctProjectIds = new Set<string>()
+      for (const row of (sceneProjects ?? []) as Array<{ project_id: string }>) {
+        if (row.project_id) distinctProjectIds.add(row.project_id)
+      }
+
+      if (distinctProjectIds.size >= FREE_PLAN_MAX_SCRIPTS_IN_PLAN) {
+        return NextResponse.json(
+          {
+            error: `Límite del plan Free: máximo ${FREE_PLAN_MAX_SCRIPTS_IN_PLAN} guiones en tu plan.`,
+            code: 'FREE_PLAN_LIMIT',
+            limit: FREE_PLAN_MAX_SCRIPTS_IN_PLAN,
+          },
+          { status: 402 }
+        )
+      }
     }
 
     const body = await request.json() as {

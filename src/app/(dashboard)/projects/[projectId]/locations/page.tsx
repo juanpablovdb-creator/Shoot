@@ -1,9 +1,13 @@
+import Link from 'next/link'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { LocationsSection } from '@/components/locations/LocationsSection'
 
 export const dynamic = 'force-dynamic'
+
+const outlineLinkClass =
+  'inline-flex h-9 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary/20 hover:bg-muted/50'
 
 export default async function LocationsPage({
   params,
@@ -79,8 +83,24 @@ export default async function LocationsPage({
   return (
     <>
       <PageHeader
-        title="Locaciones"
-        description="Todas las locaciones del proyecto. Ordena por nombre (A–Z, Z–A) o por aparición en el guion."
+        title="Sets"
+        description="Sets y locaciones de rodaje del proyecto. Cada escena lleva cabecera/set en el Desglose; desde Elementos puedes ver otras categorías (arte, utilería…) por escena."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/projects/${projectId}/breakdown`}
+              className={outlineLinkClass}
+            >
+              Desglose
+            </Link>
+            <Link
+              href={`/projects/${projectId}/elements`}
+              className={outlineLinkClass}
+            >
+              Elementos
+            </Link>
+          </div>
+        }
       />
       <LocationsSection items={unifiedItems} />
     </>

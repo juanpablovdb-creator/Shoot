@@ -136,7 +136,7 @@ export function StripboardView({ strips, projectId, scriptTotalPages }: Stripboa
             </div>
           ) : (
             sortedStrips.map((strip) => (
-              <StripRow key={strip.id} {...strip} />
+              <StripRow key={strip.id} projectId={projectId} {...strip} />
             ))
           )}
         </div>

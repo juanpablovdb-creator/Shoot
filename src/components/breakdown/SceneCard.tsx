@@ -92,7 +92,7 @@ export function SceneCard({
         />
         <div className="flex-1 p-4">
           {/* Fila 1: Scene, Int/Ext, Set, Day/Night, Págs */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="font-semibold text-foreground">
               Escena {sceneNumber}
             </span>
@@ -106,12 +106,14 @@ export function SceneCard({
               {intExt} / {dayNight}
             </span>
             {(setLocationName || locationName) && (
-              <span className="text-muted-foreground">
-                {setLocationName}
-                {setLocationName && locationName ? ` · ${locationName}` : ''}
+              <span className="min-w-0 flex-1 text-muted-foreground">
+                <span className="line-clamp-1 break-words">
+                  {setLocationName}
+                  {setLocationName && locationName ? ` · ${locationName}` : ''}
+                </span>
               </span>
             )}
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
               {formatEighthsOctavosOnly(pageEighths)} pág.
             </span>
           </div>
@@ -179,12 +181,13 @@ export function SceneCard({
             </div>
           )}
 
-          {/* STU / SFX / VFX */}
-          <div className="mt-2 flex gap-3 text-[10px] text-muted-foreground">
-            <span>STU {hasStunts ? '✓' : '—'}</span>
-            <span>SFX {hasSfx ? '✓' : '—'}</span>
-            <span>VFX {hasVfx ? '✓' : '—'}</span>
-          </div>
+          {(hasStunts || hasSfx || hasVfx) && (
+            <div className="mt-2 flex gap-3 text-[10px] text-muted-foreground">
+              <span>STU {hasStunts ? '✓' : '—'}</span>
+              <span>SFX {hasSfx ? '✓' : '—'}</span>
+              <span>VFX {hasVfx ? '✓' : '—'}</span>
+            </div>
+          )}
         </div>
       </div>
     </button>

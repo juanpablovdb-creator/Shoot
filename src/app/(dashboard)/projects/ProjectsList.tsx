@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { PROJECT_TYPES } from '@/lib/constants/project-types'
 import { cn } from '@/lib/utils'
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import { MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 
 async function loadProjects(): Promise<Project[]> {
   const supabase = createClient()
@@ -84,22 +84,22 @@ export function ProjectsList() {
 
   if (projects.length === 0) {
     return (
-      <Card className="rounded-xl border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Sin proyectos</CardTitle>
-          <CardDescription>
-            Crea tu primer proyecto para comenzar el desglose.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link
-            href="/projects/new"
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Crear proyecto
-          </Link>
-        </CardContent>
-      </Card>
+      <div className="flex min-h-[min(70vh,560px)] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
+        <p className="text-lg font-semibold text-foreground">Aún no tienes proyectos</p>
+        <p className="mt-2 max-w-md text-sm text-muted-foreground">
+          Crea uno para importar el guion, hacer el desglose y armar el stripboard.
+        </p>
+        <Link
+          href="/projects/new"
+          className={cn(
+            buttonVariants({ size: 'lg' }),
+            'mt-8 gap-2 shadow-md'
+          )}
+        >
+          <Plus className="size-5" />
+          Nuevo proyecto
+        </Link>
+      </div>
     )
   }
 

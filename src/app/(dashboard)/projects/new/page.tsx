@@ -110,7 +110,7 @@ export default function NewProjectPage() {
       return
     }
 
-    // Desglose automático: extraer texto, parsear con IA, crear escenas y sincronizar cast
+    // Desglose automático: extraer texto, parsear con IA y crear escenas
     try {
       const extractRes = await fetch(`/api/projects/${projectId}/extract-script`)
       const extractData = (await extractRes.json()) as {

@@ -21,6 +21,7 @@ const PAGES_PER_DAY_LIMITS: Record<
   novela: { min: 10, max: 15 },
   largometraje_service: { min: 1, max: 5 },
   largometraje_nacional: { min: 2, max: 7 },
+  cortometraje: { min: 2, max: 7 },
 }
 
 export function validateFirstDays(

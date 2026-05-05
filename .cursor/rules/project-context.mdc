@@ -17,7 +17,7 @@ Plataforma para producciones audiovisuales (películas y series), tipo Movie Mag
 
 ## Base de datos (Supabase)
 
-Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_members`, `locations`, `sets`, `breakdown_elements` (categorías canónicas tipo Movie Magic: cast, extras, stunts, SPFX, VFX, armas, animales, vehículos, coord. intimidad, utilería, vestuario, maq/pelo, maq FX, arte, fotografía, sonido, fotografías, música, observaciones), `production_calendars`, `shooting_days`, `stripboard_strips`, `dood_entries`. RLS y triggers ya definidos en el schema.
+Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_members`, `locations`, `sets`, `breakdown_elements` (categorías canónicas: cast, extras, figuración, stunts, SPFX, VFX, …), `production_calendars`, `shooting_days`, `stripboard_strips`, `dood_entries`. RLS y triggers ya definidos en el schema.
 
 ## Reglas de negocio
 
@@ -28,16 +28,16 @@ Tablas principales: `projects`, `episodes` / `shooting_blocks`, `scenes`, `cast_
 - **Series:** escenas por capítulo (Cap 1 = 100–199, Cap 2 = 200–299).
 - **Páginas por día:**
   - Serie plataforma: 5–8
-  - Novela/Netflix: 10–15
-  - Largometraje service: 1–5
-  - Largometraje nacional: 2–7
+  - Serie nacional / novela: 10–15
+  - Largometraje (service): 1–5
+  - Largometraje (nacional) y cortometraje: 2–7
 
 ## Stripboard – colores
 
 - INT/DÍA = blanco
 - EXT/DÍA = amarillo
 - INT/NOCHE = azul
-- EXT/NOCHE = verde
+- EXT/NOCHE = azul oscuro
 - Calcular color según INT/EXT + DÍA/NOCHE en escena.
 
 ## Código

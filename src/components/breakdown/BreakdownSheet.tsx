@@ -6,8 +6,9 @@ import { ImportScriptDialog } from './ImportScriptDialog'
 import { ScriptSection } from './ScriptSection'
 import { buttonVariants } from '@/components/ui/button'
 import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
+import { sceneHasFxCategory } from '@/lib/scene-fx-from-elements'
 import { cn } from '@/lib/utils'
-import { Layers, Plus } from 'lucide-react'
+import { Download, Layers, Plus } from 'lucide-react'
 import Link from 'next/link'
 
 interface SceneRow {
@@ -103,12 +104,52 @@ export function BreakdownSheet({
         initialScriptFileName={initialScriptFileName}
         initialScenesCount={initialScenes.length}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {initialScenes.length} escena{initialScenes.length !== 1 ? 's' : ''}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/projects/${projectId}/elements`}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          >
+            Elementos
+          </Link>
+          <Link
+            href={`/projects/${projectId}/cast`}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          >
+            Cast
+          </Link>
+          <Link
+            href={`/projects/${projectId}/stripboard`}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          >
+            Stripboard
+          </Link>
+          <Link
+            href={`/projects/${projectId}/locations`}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          >
+            Sets
+          </Link>
           <ImportScriptDialog projectId={projectId} />
+          <a
+            href={`/api/projects/${projectId}/export/breakdown-csv`}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            download
+          >
+            <Download className="size-4" />
+            Desglose CSV
+          </a>
+          <a
+            href={`/api/projects/${projectId}/export/cast-csv`}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            download
+          >
+            <Download className="size-4" />
+            Cast CSV
+          </a>
           <Link
             href={`/projects/${projectId}/breakdown/new`}
             className={cn(buttonVariants({ size: 'sm' }))}
@@ -179,9 +220,9 @@ export function BreakdownSheet({
               locationName={locationName}
               synopsis={scene.synopsis}
               pageEighths={scene.page_eighths}
-              hasStunts={scene.has_stunts}
-              hasSfx={scene.has_sfx}
-              hasVfx={scene.has_vfx}
+              hasStunts={sceneHasFxCategory(scene.scene_elements, 'stunts', scene.has_stunts)}
+              hasSfx={sceneHasFxCategory(scene.scene_elements, 'spfx', scene.has_sfx)}
+              hasVfx={sceneHasFxCategory(scene.scene_elements, 'vfx', scene.has_vfx)}
               castEntries={(() => {
                 const fromElements = (scene.scene_elements ?? [])
                   .map((e) => e.breakdown_elements)

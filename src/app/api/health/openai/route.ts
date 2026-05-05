@@ -72,7 +72,7 @@ export async function GET() {
         ok: false,
         error: 'Error al conectar con OpenAI',
         details: e instanceof Error ? e.message : String(e),
-        hint: 'Comprueba tu conexión y que OPENAI_API_KEY sea una clave válida de API (no de ChatGPT).',
+        hint: 'Comprueba tu conexión y que OPENAI_API_KEY sea una clave válida de API (no una sesión del navegador).',
       },
       { status: 500 }
     )

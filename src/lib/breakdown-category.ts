@@ -6,7 +6,12 @@ import type { BreakdownCategoryKey } from '@/types'
 const ALIASES: Record<string, BreakdownCategoryKey> = {
   personajes: 'cast',
   characters: 'cast',
+  /** Multitudes de atmósfera */
   figurantes: 'extras',
+  /** Bits / siluetas con función (map legacy IA → figuración) */
+  figuration: 'figuracion',
+  bits: 'figuracion',
+  atmosphere_extras: 'extras',
   maquillaje: 'maq_pelo',
   makeup: 'maq_pelo',
   grafica_archivo: 'arte',

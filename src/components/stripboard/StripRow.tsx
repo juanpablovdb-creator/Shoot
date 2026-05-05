@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { getStripColor } from '@/lib/constants/strip-colors'
 import { STRIP_COLORS } from '@/lib/constants/strip-colors'
 import type { IntExt, DayNight } from '@/types'
@@ -45,6 +46,7 @@ const dayNightLabel: Record<string, string> = {
 }
 
 export function StripRow({
+  id,
   scene_number,
   int_ext,
   day_night,
@@ -60,7 +62,8 @@ export function StripRow({
   stuntNumbers,
   castNames,
   className,
-}: StripRowData & { className?: string }) {
+  projectId,
+}: StripRowData & { className?: string; projectId?: string }) {
   const castDisplay =
     castNumbers.length > 0
       ? `Cast: ${castNumbers.join(', ')}`
@@ -77,26 +80,22 @@ export function StripRow({
 
   // Líneas que llegan hasta abajo: una sola fila con items-stretch; borde derecho en cada celda
   const colBorder = 'border-r border-gray-800'
+  const hasAnyFx = has_stunts || has_sfx || has_vfx
   const elementsLine = [
-    'STU',
-    has_stunts ? '✓' : '—',
-    'SFX',
-    has_sfx ? '✓' : '—',
-    'VFX',
-    has_vfx ? '✓' : '—',
-    'Ext: 0',
-    'Bits: 0',
+    `STU ${has_stunts ? '✓' : '—'}`,
+    `SFX ${has_sfx ? '✓' : '—'}`,
+    `VFX ${has_vfx ? '✓' : '—'}`,
   ].join(' ')
 
-  return (
-    <div
-      className={cn(
-        'flex min-h-[72px] items-stretch border-b border-gray-800 transition-colors hover:opacity-95',
-        className
-      )}
-      style={{ backgroundColor: stripStyle.bgStrip ?? stripStyle.bg }}
-      role="row"
-    >
+  const rowClass = cn(
+    'flex min-h-[72px] items-stretch border-b border-gray-800 transition-colors',
+    projectId ? 'cursor-pointer hover:bg-black/[0.04]' : 'hover:opacity-95',
+    className
+  )
+  const rowStyle = { backgroundColor: stripStyle.bgStrip ?? stripStyle.bg }
+
+  const cells = (
+    <>
       {/* Franja de color */}
       <div
         className={cn('w-2 shrink-0', colBorder)}
@@ -114,10 +113,14 @@ export function StripRow({
         <div className="flex min-h-[36px] flex-1">
           <div className="flex min-w-0 flex-1 flex-col justify-start border-r border-gray-800 px-2 py-1.5">
             <span className="text-xs font-normal text-gray-800">{int_ext}</span>
-            <span className="mt-0.5 text-base font-bold leading-tight text-gray-900">{titleLabel}</span>
+            <span className="mt-0.5 line-clamp-2 break-words text-sm font-bold leading-snug text-gray-900 sm:text-base sm:leading-tight">
+              {titleLabel}
+            </span>
           </div>
           <div className="flex w-[100px] shrink-0 items-start px-2 py-1.5">
-            <span className="text-xs font-normal text-gray-800">{locationLabel}</span>
+            <span className="line-clamp-2 break-words text-xs font-normal text-gray-800">
+              {locationLabel}
+            </span>
           </div>
         </div>
         {/* Mitad inferior: descripción entre las dos columnas (sin línea en medio) */}
@@ -134,10 +137,16 @@ export function StripRow({
         <div className="flex flex-1 flex-col justify-center px-2 py-1">
           <span className="text-xs font-normal text-gray-900 underline decoration-gray-900/60">{castDisplay}</span>
         </div>
-        <div className="border-t border-gray-800" />
-        <div className="flex items-center px-2 py-1">
-          <span className="text-[10px] font-normal leading-tight text-gray-700">{elementsLine}</span>
-        </div>
+        {hasAnyFx && (
+          <>
+            <div className="border-t border-gray-800" />
+            <div className="flex items-center px-2 py-1">
+              <span className="text-[10px] font-normal leading-tight text-gray-700">
+                {elementsLine}
+              </span>
+            </div>
+          </>
+        )}
       </div>
       {/* Stunts: arriba "Stunts:n", línea, abajo vacío */}
       <div className={cn('flex w-[72px] shrink-0 flex-col', colBorder)}>
@@ -152,6 +161,26 @@ export function StripRow({
         <span className="text-[10px] font-normal text-gray-700">Págs.</span>
         <span className="text-base font-bold tabular-nums text-gray-900">{formatPagesEighths(page_eighths)}</span>
       </div>
+    </>
+  )
+
+  if (projectId) {
+    return (
+      <Link
+        href={`/projects/${projectId}/breakdown/${id}`}
+        className={rowClass}
+        style={rowStyle}
+        role="row"
+        title="Abrir desglose de la escena"
+      >
+        {cells}
+      </Link>
+    )
+  }
+
+  return (
+    <div className={rowClass} style={rowStyle} role="row">
+      {cells}
     </div>
   )
 }

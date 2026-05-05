@@ -5,6 +5,7 @@
  * Fuente única del conteo: scene_elements + breakdown_elements (categoría cast).
  */
 import type { createClient } from '@/lib/supabase/server'
+import { parseSceneNumber } from '@/types'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
@@ -16,6 +17,8 @@ export type CastMemberRow = {
   availability_notes: string | null
   /** Número de escenas en que aparece el personaje. */
   appearance_count?: number
+  /** Números de escena donde aparece (orden de guion). */
+  appearance_scene_numbers?: string[]
 }
 
 const CHUNK = 80
@@ -130,19 +133,28 @@ export async function getCastFromBreakdown(
   const sceneBreakdown = await getSceneCastBreakdown(supabase, projectId)
 
   const groupedWithCount = grouped.map((g) => {
-    let scenesWithGroup = 0;
+    let scenesWithGroup = 0
+    const sceneNums: string[] = []
     for (const row of sceneBreakdown) {
-      const baseNamesInScene = row.cast_names.map((n) => baseName(n).toLowerCase());
+      const baseNamesInScene = row.cast_names.map((n) => baseName(n).toLowerCase())
       if (baseNamesInScene.some((b) => b === g.baseKey)) {
-        scenesWithGroup++;
+        scenesWithGroup++
+        sceneNums.push(String(row.scene_number))
       }
     }
+    sceneNums.sort((a, b) => {
+      const pa = parseSceneNumber(a)
+      const pb = parseSceneNumber(b)
+      if (pa.base !== pb.base) return pa.base - pb.base
+      return pa.suffix.localeCompare(pb.suffix)
+    })
     return {
       id: g.id,
       character_name: g.character_name,
       appearance_count: scenesWithGroup,
-    };
-  });
+      appearance_scene_numbers: sceneNums,
+    }
+  })
   const sorted = [...groupedWithCount].sort((a, b) => {
     const d = b.appearance_count - a.appearance_count;
     if (d !== 0) return d;
@@ -159,7 +171,8 @@ export async function getCastFromBreakdown(
     actor_name: null,
     availability_notes: null,
     appearance_count: g.appearance_count,
-  }));
+    appearance_scene_numbers: g.appearance_scene_numbers,
+  }))
 }
 
 

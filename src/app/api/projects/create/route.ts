@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  PROJECT_TYPE_KEYS,
+  PROJECT_TYPE_LEGACY_DB_TYPE,
+} from '@/lib/constants/project-types'
+import type { ProjectType } from '@/types'
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +29,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'name es obligatorio' }, { status: 400 })
     }
 
-    const projectType = body.project_type ?? 'serie_plataforma'
+    const rawType = body.project_type ?? 'serie_plataforma'
+    const projectType: ProjectType = PROJECT_TYPE_KEYS.includes(rawType as ProjectType)
+      ? (rawType as ProjectType)
+      : 'serie_plataforma'
+    const legacyType =
+      PROJECT_TYPE_LEGACY_DB_TYPE[projectType] ?? projectType
+
     const admin = createAdminClient()
     const { data, error } = await admin
       .from('projects')
@@ -32,7 +43,7 @@ export async function POST(request: Request) {
         name,
         code: body.code || null,
         project_type: projectType,
-        type: projectType, // columna legacy NOT NULL en la tabla
+        type: legacyType,
         user_id: user.id,
       })
       .select('id')

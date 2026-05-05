@@ -3,59 +3,250 @@ import { createClient } from '@/lib/supabase/server'
 import { BREAKDOWN_CATEGORY_KEYS } from '@/lib/constants/categories'
 import { normalizeBreakdownCategory } from '@/lib/breakdown-category'
 import { inferCastFromSynopsis } from '@/lib/infer-cast-from-synopsis'
+import { parseSceneNumber } from '@/types'
+import { batchBlocksForLlm, splitScriptIntoSceneBlocks } from '@/lib/script-scene-chunks'
 
 const VALID_CATEGORIES = new Set<string>(BREAKDOWN_CATEGORY_KEYS)
-const DEFAULT_LOCATION_NAME = 'Locaciones del guion'
 
-/** Máximo de caracteres del guion que enviamos a OpenAI (gpt-4o-mini soporta ~128k tokens). */
-const MAX_SCRIPT_CHARS = 60_000
+/** Texto de guion por llamada: trozos por cabecera de escena, sin cortar a mitad de escena. */
+const MAX_USER_CHUNK_CHARS = 44_000
+const LONG_FEATURE_SCENES_CAP = 20
+
+function dedupeElements(els: Array<{ category: string; name: string }>) {
+  const seen = new Set<string>()
+  const out: Array<{ category: string; name: string }> = []
+  for (const e of els) {
+    const k = `${e.category}:${e.name.trim().toLowerCase()}`
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(e)
+  }
+  return out
+}
+
+function sortScenesForOutput(scenes: Array<Record<string, unknown>>) {
+  return [...scenes].sort((a, b) => {
+    const sa = parseSceneNumber(String(a.sceneNumber ?? ''))
+    const sb = parseSceneNumber(String(b.sceneNumber ?? ''))
+    if (sa.base !== sb.base) return sa.base - sb.base
+    return sa.suffix.localeCompare(sb.suffix)
+  })
+}
+
+function normalizeRawScene(s: unknown): Record<string, unknown> | null {
+  const scene = s as Record<string, unknown>
+  const elements = Array.isArray(scene.elements)
+    ? (scene.elements as Array<{ category?: string; name?: string }>)
+        .map((el) => {
+          const catRaw = String(el?.category ?? '')
+          const name = String(el?.name ?? '').trim()
+          if (!name) return null
+          const validCat = normalizeBreakdownCategory(catRaw, VALID_CATEGORIES)
+          if (!validCat) return null
+          return { category: validCat, name }
+        })
+        .filter(Boolean) as Array<{ category: string; name: string }>
+    : []
+  let pageEighths = Number(scene.pageEighths)
+  if (!Number.isFinite(pageEighths) || pageEighths < 1) pageEighths = 8
+  if (pageEighths > 240) pageEighths = 240
+  pageEighths = Math.round(pageEighths)
+  const sceneNumber = String(scene.sceneNumber ?? '').trim()
+  if (!sceneNumber) return null
+  return {
+    ...scene,
+    sceneNumber,
+    sceneHeading: scene.sceneHeading ?? scene.set ?? '',
+    scriptPage: typeof scene.scriptPage === 'number' ? scene.scriptPage : null,
+    pageEighths,
+    elements,
+  }
+}
+
+function mergeSceneRow(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
+  const els = dedupeElements([
+    ...((a.elements as Array<{ category: string; name: string }>) ?? []),
+    ...((b.elements as Array<{ category: string; name: string }>) ?? []),
+  ])
+  const synA = String(a.synopsis ?? '')
+  const synB = String(b.synopsis ?? '')
+  const pe = Math.max(Number(a.pageEighths) || 1, Number(b.pageEighths) || 1)
+  return {
+    ...a,
+    ...b,
+    synopsis: synB.length > synA.length ? synB : synA,
+    sceneHeading: String(b.sceneHeading || a.sceneHeading || ''),
+    pageEighths: pe,
+    elements: els,
+  }
+}
+
+function buildSystemPrompt(
+  categoriesList: string,
+  totalPages: number | null,
+  chunkMode: boolean,
+  chunkIndex: number,
+  chunkTotal: number
+): string {
+  const chunkBlock = chunkMode
+    ? `
+
+MODO POR FRAGMENTOS (obligatorio):
+Recibes solo el fragmento ${chunkIndex + 1} de ${chunkTotal} del guion. Devuelve ÚNICAMENTE escenas cuya CABECERA (línea INT./EXT./EST./…) aparece en este fragmento. No inventes escenas fuera del texto. Si no hay ninguna cabecera de escena aquí, devuelve {"scenes": []}.
+`
+    : ''
+
+  const octavosClosing =
+    totalPages != null && totalPages > 0
+      ? `El guion completo tiene ${totalPages} páginas (${totalPages * 8} octavos en total). Para cada escena, pageEighths debe ser el TOTAL de octavos de esa escena completa: desde su cabecera hasta la siguiente, incluyendo todo diálogo y acción aunque cruce varias hojas (ej. 5/8 en una hoja y 6/8 en la otra = 11 octavos → pageEighths: 11).`
+      : 'Para cada escena, pageEighths (entero) = octavos totales en todo el cuerpo de la escena; si cruza páginas, SUMa los octavos de cada parte (cada página = 8 octavos).'
+
+  return `Eres un ASSISTENTE DE DIRECCIÓN EXPERTO para cine y televisión en Latinoamérica. Haces DESGLOSE DE PRODUCCIÓN (script breakdown) tipo Movie Magic / StudioBinder, completo y preciso.
+
+${chunkBlock}
+FORMATO DE SALIDA:
+Devuelves ÚNICAMENTE un JSON válido: {"scenes": [...]}. Sin markdown ni texto adicional.
+
+Cada escena:
+- sceneNumber: string ("1", "2A", …).
+- intExt: "INT" o "EXT".
+- dayNight: "DÍA", "NOCHE", "AMANECER" o "ATARDECER".
+- sceneHeading: locación / espacio.
+- pageEighths: número entero (octavos totales de la escena).
+- synopsis: 1–3 líneas.
+- scriptPage: opcional.
+- elements: [{ "category", "name" }], nunca vacío; siempre incluye "cast" con todos los personajes de la escena.
+
+OCTAVOS (crítico):
+${octavosClosing}
+- 8 octavos = 1 página. La UI muestra p.ej. "1 3/8" si pageEighths = 11.
+
+CAST (obligatorio en cada escena — crítico):
+- Debes leer el TEXTO COMPLETO de la escena en este fragmento: desde la cabecera INT./EXT. hasta justo antes de la siguiente cabecera. Eso incluye líneas tras saltos de página, "(CONTINUED)", números de página o "OMITIDO" en PDF: el reparto debe reflejar a TODOS los personajes con diálogo o acción en cualquier parte de ese bloque, no solo la primera página.
+- Mismo nombre de personaje en todas las escenas para que el sistema cuente apariciones.
+
+STUNTS / SPFX / VFX:
+- stunts: cualquier acción física riesgosa o coreografiada (peleas, caídas, cascadas, conducción peligrosa, abordaje, persecución a pie…).
+- spfx: efectos en set (humo, lluvia, sangre práctica, explosión en cámara…).
+- vfx: pantalla verde, limpiezas, compósitos, CGI.
+Sé explícito: si la acción lo sugiere, incluye entradas en esas categorías además del cast.
+
+EXTRAS vs FIGURACIÓN (categorías distintas):
+- extras: multitudes / atmósfera genérica ("restaurante lleno", "multitud"). Cantidad en paréntesis si aplica.
+- figuracion: bits con función (mesero, taxista sin diálogo, policía de fondo nombrado como bit), figuración especial.
+
+CATEGORÍAS (claves exactas, minúsculas): ${categoriesList}
+
+Incluye stunts, spfx, vfx cuando haya acción física, efectos prácticos o digitales.
+
+Responde solo con el JSON.`
+}
+
+async function callOpenAiScenes(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userContent: string
+): Promise<{ scenes: unknown[]; usage?: number }> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 16384,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`OpenAI ${res.status}: ${err.slice(0, 400)}`)
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+    usage?: { total_tokens?: number }
+  }
+  const content = data.choices?.[0]?.message?.content?.trim()
+  if (!content) throw new Error('Respuesta vacía de OpenAI')
+  const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+  const parsed = JSON.parse(cleaned) as { scenes?: unknown[] }
+  if (!Array.isArray(parsed.scenes)) throw new Error('Falta array scenes en JSON')
+  return { scenes: parsed.scenes, usage: data.usage?.total_tokens }
+}
+
+function scalePageEighthsToTarget(
+  scenes: Array<Record<string, unknown>>,
+  targetTotalEighths: number
+) {
+  if (scenes.length === 0) return
+  const raw = scenes.map((s) => Math.max(1, Number((s as { pageEighths: number }).pageEighths) || 1))
+  const sum = raw.reduce((a, b) => a + b, 0)
+  if (sum <= 0) return
+  const scale = targetTotalEighths / sum
+  let acc = 0
+  for (let i = 0; i < scenes.length; i++) {
+    const v =
+      i === scenes.length - 1
+        ? Math.max(1, targetTotalEighths - acc)
+        : Math.max(1, Math.round(raw[i]! * scale))
+    ;(scenes[i] as { pageEighths: number }).pageEighths = v
+    acc += v
+  }
+  const drift = targetTotalEighths - acc
+  if (drift !== 0 && scenes.length > 0) {
+    const last = scenes[scenes.length - 1] as { pageEighths: number }
+    last.pageEighths = Math.max(1, last.pageEighths + drift)
+  }
+}
 
 /**
- * POST /api/parse-script
- *
- * Acepta JSON: { "text": "..." [, "projectId": "uuid" ] }.
- * El texto se extrae del PDF en el cliente (navegador) para evitar el worker en el servidor.
- * La IA (OpenAI gpt-4o-mini) devuelve un desglose tipo Movie Magic.
- * Requiere OPENAI_API_KEY en .env.local.
+ * POST /api/parse-script — JSON { text, projectId?, totalPages? }.
+ * Guiones largos: varias llamadas por bloques de escena completas; se fusionan y ordenan.
  */
 export async function POST(request: Request) {
   console.log('[parse-script] POST received')
 
   const apiKey = process.env.OPENAI_API_KEY
-  console.log('[parse-script] OPENAI_API_KEY:', apiKey ? 'present' : 'MISSING')
   if (!apiKey || !apiKey.trim()) {
-    console.warn('[parse-script] OPENAI_API_KEY no está definida. Añádela en .env.local')
     return NextResponse.json(
       {
-        error:
-          'Falta OPENAI_API_KEY en .env.local. Usa GPT-4o-mini para mejor costo.',
-        hint: 'Añade OPENAI_API_KEY en .env.local y reinicia el servidor (npm run dev).',
+        error: 'Falta OPENAI_API_KEY en .env.local.',
+        hint: 'Añade OPENAI_API_KEY y reinicia el servidor.',
       },
       { status: 500 }
     )
   }
 
-  let body: { text?: string; projectId?: string; useGpt4?: boolean; totalPages?: number }
+  let body: { text?: string; projectId?: string; totalPages?: number }
   try {
     body = await request.json()
   } catch {
-    console.warn('[parse-script] Rejected: invalid JSON body')
-    return NextResponse.json(
-      { error: 'Cuerpo JSON inválido. Envía { "text": "..." }.' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Cuerpo JSON inválido.' }, { status: 400 })
   }
   const text = body.text?.trim() ?? ''
-  console.log('[parse-script] text length:', text.length)
   if (!text) {
-    console.warn('[parse-script] Rejected: text empty')
     return NextResponse.json(
       { error: 'Texto del guion vacío.', hint: 'Pega texto o sube un PDF con texto extraíble.' },
       { status: 400 }
     )
   }
+
+  let isFeatureFilm = false
   if (body.projectId && typeof body.projectId === 'string') {
     const supabase = await createClient()
+    const { data: projectMeta } = await supabase
+      .from('projects')
+      .select('project_type')
+      .eq('id', body.projectId)
+      .single()
+    const projectType = (projectMeta as { project_type?: string } | null)?.project_type ?? null
+    isFeatureFilm = projectType === 'largometraje_service' || projectType === 'largometraje_nacional'
     await supabase
       .from('projects')
       .update({ script_content: text.slice(0, 500000) })
@@ -64,243 +255,86 @@ export async function POST(request: Request) {
 
   const categoriesList = BREAKDOWN_CATEGORY_KEYS.join(', ')
   const totalPages = typeof body.totalPages === 'number' && body.totalPages > 0 ? body.totalPages : null
+  const model = 'gpt-4o-mini'
 
-  const systemPrompt = `Eres un ASSISTENTE DE DIRECCIÓN EXPERTO para cine y televisión en Latinoamérica. Tu trabajo es hacer un DESGLOSE DE PRODUCCIÓN (script breakdown) profesional, escena por escena, con todos los elementos que dirección y producción necesitan para planificar rodaje, presupuesto y plan de trabajo. Estilo Movie Magic / StudioBinder. El desglose debe ser COMPLETO y PRECISO: de él depende el cálculo de días de rodaje, cantidad de apariciones por personaje y la lista de elementos por categoría.
+  const blocks = splitScriptIntoSceneBlocks(text)
+  if (blocks.length === 0) {
+    return NextResponse.json({ error: 'No se pudo segmentar el guion.' }, { status: 400 })
+  }
+  const batches = batchBlocksForLlm(blocks, MAX_USER_CHUNK_CHARS)
+  const chunkMode = batches.length > 1
 
-OBLIGATORIO: Incluye TODAS las escenas del guion en el array "scenes". No omitas ninguna. Una escena = una cabecera (INT/EXT + locación + DÍA/NOCHE). Si el guion tiene 20 escenas, devuelves 20 objetos en "scenes".
+  console.log(
+    '[parse-script]',
+    text.length,
+    'chars,',
+    blocks.length,
+    'bloques,',
+    batches.length,
+    'llamada(s), modelo',
+    model
+  )
 
-FORMATO DE SALIDA:
-Devuelves ÚNICAMENTE un JSON válido con un objeto que tenga un array "scenes". Sin markdown, sin \`\`\`json, sin texto antes ni después. Solo el JSON.
-
-ESTRUCTURA DE CADA ESCENA (formato Scene Breakdown Sheet tipo Movie Magic):
-- sceneNumber: string — exactamente como en el guion ("1", "2", "2A", "10B").
-- intExt: "INT" o "EXT" (solo interior o exterior; estándar industria).
-- dayNight: "DÍA", "NOCHE", "AMANECER" o "ATARDECER".
-- sceneHeading: string — cabecera "LOCACIÓN - ESPACIO" (ej. "DIARIO EL CARIBE - OFICINA PACHO", "CASA DE MARÍA - SALA").
-- pageEighths: number — OCTAVOS de página (entero). Ver reglas abajo.
-- synopsis: string — 1 a 3 líneas: qué pasa, quién está, conflicto o acción. Que un lector entienda la escena sin leer el guion.
-- scriptPage: number (opcional) — página del guion donde empieza la escena, si se identifica.
-- elements: array de objetos con "category" y "name". OBLIGATORIO en todas las escenas; nunca vacío. Cast obligatorio en cada escena.
-
-OCTAVOS DE PÁGINA (1/8ths) — CRÍTICO:
-${totalPages != null ? `El guion tiene ${totalPages} páginas en total. Distribuye los octavos de cada escena proporcionalmente basándote en la longitud del texto de cada escena relativa al texto total.` : 'El número total de páginas no se ha indicado. Distribuye los octavos proporcionalmente basándote en la longitud del texto de cada escena relativa al texto total.'}
-
-En industria cada página del guion se divide en 8 partes (aprox. 1 pulgada). 1 página = 8 octavos. Se usa para estimar tiempo de pantalla y de rodaje (ej. ~5 páginas/día en diálogo típico).
-- Devuelves siempre un ENTERO en pageEighths (ej. 5, 8, 11, 14). La UI mostrará "1 3/8" cuando pageEighths = 11.
-- Referencia por longitud real del texto:
-  * Escena corta (4–6 líneas): 3–5 octavos.
-  * Media página: 4 octavos. Cuarto de página: 2. Tres cuartos: 6.
-  * Una página llena: 8 octavos.
-  * Página y media: 12. Dos páginas: 16.
-- NO infles: si la escena es claramente menos de una página, no uses 8. Estima por LONGITUD REAL.
-- Casos que pesan más (usa más octavos): stunts, multitudes, locaciones complejas, persecuciones, efectos prácticos, actuaciones musicales. Una línea tipo "X interpreta una canción" puede ser 2–3 min de pantalla → 16–24 octavos (2–3 páginas equivalentes).
-
-CAST (PERSONAJES) — CRÍTICO:
-En CADA escena lista en elements TODOS los personajes que: aparecen en escena (acción o diálogo), hablan (aunque sea una línea) o son nombrados/referidos de forma relevante.
-- category: siempre "cast".
-- name: nombre tal cual en el guion. Puedes usar:
-  * Nombre solo: "Catalina", "Pacho Martínez".
-  * Nombre + edad entre paréntesis: "Catalina (17)".
-  * Nombre + rol/nota: "Pacho Martínez (Director Diario El Caribe)".
-- CONSISTENCIA: el mismo personaje debe llevar el MISMO nombre en todas las escenas (ej. siempre "Pacho Martínez", no "Pacho" en una y "Pacho Martínez" en otra). Así el sistema cuenta apariciones y asigna número (1 = el que más sale). No omitas a nadie; el protagonista debe estar en elements en TODAS sus escenas.
-
-EXTRAS Y CANTIDADES:
-- extras: figuración, bits y atmósfera (ej. "restaurante lleno", "escritores del diario"). Si el guion indica CANTIDAD, inclúyela en el name entre paréntesis: "Escritores Diario el Caribe (20)".
-
-CATEGORÍAS PERMITIDAS (claves exactas en minúsculas): ${categoriesList}
-
-USO POR CATEGORÍA (sé exhaustivo):
-- cast: siempre en cada escena (al menos los que aparecen/hablan).
-- extras: cuando aplique; cantidad en name si se conoce.
-- stunts: acción física, peleas, caídas, persecuciones, conducción extrema.
-- spfx: efectos prácticos (humo, lluvia, fuego, sangre, explosiones prácticas).
-- vfx: efectos digitales, pantalla verde, CGI.
-- utileria: objetos que se usan o se ven (premios en estantes, fotografías en oficina, teléfono, taza, etc.).
-- vestuario, maq_pelo, maq_fx, arte: cuando sean relevantes o se mencionen (maquillaje general → maq_pelo; FX de caracterización → maq_fx).
-- vehiculos, armas, animales: si aparecen o se mencionan.
-- coordinacion_intimidad: escenas de intimidad que requieran coordinación.
-- fotografia, sonido, musica, fotografias: cámara, sonido directo, música diegética, fotos/ref. en utilería o arte (fotografías = imágenes como objeto en escena).
-- observaciones: notas de producción que no encajen en otra categoría.
-
-UNA ESCENA = UNA CABECERA. Si cambia locación o momento, es otra escena. Cortes dentro del mismo lugar y momento pueden ser una sola escena con varios elements.
-
-EJEMPLOS:
-
-1) Escena corta (poco más de media página), pageEighths 5:
-{"sceneNumber":"1","intExt":"INT","dayNight":"DÍA","synopsis":"David come solo en el comedor, perdido en sus pensamientos. Nadie más en casa.","pageEighths":5,"sceneHeading":"COMEDOR - CASA FAMILIA","scriptPage":1,"elements":[{"category":"cast","name":"David"},{"category":"utileria","name":"Plato"},{"category":"utileria","name":"Cubiertos"},{"category":"arte","name":"Comedor amueblado"}]}
-
-2) Escena oficina con diálogo, extras con cantidad, utilería y fotografías (1 3/8 = 11 octavos):
-{"sceneNumber":"311","intExt":"INT","dayNight":"DÍA","synopsis":"Catalina quiere ser candidata al reinado de periódicos. Pacho, emocionado, la anima y acepta.","pageEighths":11,"sceneHeading":"DIARIO EL CARIBE - OFICINA PACHO","scriptPage":14,"elements":[{"category":"cast","name":"Catalina (17)"},{"category":"cast","name":"Pacho Martínez (Director Diario El Caribe)"},{"category":"extras","name":"Escritores Diario el Caribe (20)"},{"category":"utileria","name":"Premios en estantes"},{"category":"utileria","name":"Fotografías en oficina"},{"category":"fotografias","name":"Fotografías de Pacho junto a personalidades"},{"category":"fotografias","name":"Fotos de anteriores candidatas al reinado"}]}
-
-3) Escena de acción (stunts y efectos):
-{"sceneNumber":"5","intExt":"EXT","dayNight":"NOCHE","synopsis":"Persecución en coche; el villano embiste; choque y explosión. Ana sale del vehículo.","pageEighths":14,"sceneHeading":"CARRETERA - NOCHE","scriptPage":3,"elements":[{"category":"cast","name":"Ana"},{"category":"cast","name":"Villano"},{"category":"stunts","name":"Persecución en vehículo"},{"category":"stunts","name":"Choque"},{"category":"spfx","name":"Explosión práctica"},{"category":"vfx","name":"Fuego y humo (post)"},{"category":"vehiculos","name":"Coche Ana"},{"category":"vehiculos","name":"Coche villano"}]}
-
-${totalPages != null && totalPages > 0 ? `OCTAVOS — REGLA ESTRICTA: El guion tiene ${totalPages} páginas. La suma de todos los pageEighths de todas las escenas debe ser exactamente ${totalPages * 8}. Distribuye los octavos proporcionalmente: escena corta (1-5 líneas) = 1-3 octavos, escena media (6-15 líneas) = 4-6 octavos, escena larga (16+ líneas) = 7-16 octavos. Verifica antes de responder que la suma total cuadre con el número de páginas.` : 'OCTAVOS — REGLA: Distribuye los octavos proporcionalmente: escena corta (1-5 líneas) = 1-3 octavos, escena media (6-15 líneas) = 4-6 octavos, escena larga (16+ líneas) = 7-16 octavos.'}
-
-Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}. Cada escena con todos los campos obligatorios, elements nunca vacío, cast completo, pageEighths entero según longitud real del texto.`
-
-  const useGpt4 = Boolean(body.useGpt4)
-  const model = useGpt4 ? 'gpt-4o' : 'gpt-4o-mini'
-  const userContent = text.slice(0, MAX_SCRIPT_CHARS)
-  console.log('[parse-script] Calling OpenAI', model, 'with', userContent.length, 'chars...')
+  const merged = new Map<string, Record<string, unknown>>()
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-        temperature: 0.2,
-        max_tokens: 16384,
-      }),
-    })
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]!
+      const userContent = batch.join('\n\n')
+      const systemPrompt = buildSystemPrompt(categoriesList, totalPages, chunkMode, i, batches.length)
+      const { scenes: rawScenes, usage } = await callOpenAiScenes(apiKey, model, systemPrompt, userContent)
+      console.log('[parse-script] chunk', i + 1, '/', batches.length, 'escenas:', rawScenes.length, 'tokens:', usage ?? '?')
 
-    console.log('[parse-script] OpenAI response status:', res.status)
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[parse-script] OpenAI error:', res.status, err.slice(0, 300))
-      return NextResponse.json(
-        {
-          error: 'Error de OpenAI',
-          details: err.slice(0, 500),
-          hint: 'Revisa OPENAI_API_KEY (debe ser API key de platform.openai.com, no de ChatGPT).',
-        },
-        { status: 502 }
-      )
-    }
-
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
-      usage?: { total_tokens?: number }
-    }
-    const content = data.choices?.[0]?.message?.content?.trim()
-    if (!content) {
-      console.error('[parse-script] OpenAI returned empty content')
-      return NextResponse.json(
-        { error: 'Respuesta vacía de OpenAI', details: 'El modelo no devolvió texto.' },
-        { status: 502 }
-      )
-    }
-
-    const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
-    const parsed = JSON.parse(cleaned) as { scenes?: unknown[] }
-    if (!Array.isArray(parsed.scenes)) {
-      console.error('[parse-script] Response missing scenes array. Content preview:', cleaned.slice(0, 200))
-      return NextResponse.json(
-        { error: 'Formato de respuesta inválido', details: 'Falta el array "scenes" en el JSON.' },
-        { status: 502 }
-      )
-    }
-    console.log('[parse-script] OpenAI OK, escenas recibidas:', parsed.scenes.length, 'usage:', data.usage?.total_tokens ?? '?')
-
-    // Normalizar categorías y filtrar elementos inválidos
-    let scenes = parsed.scenes.map((s: unknown) => {
-      const scene = s as Record<string, unknown>
-      const elements = Array.isArray(scene.elements)
-        ? (scene.elements as Array<{ category?: string; name?: string }>)
-            .map((el) => {
-              const catRaw = String(el?.category ?? '')
-              const name = String(el?.name ?? '').trim()
-              if (!name) return null
-              const validCat = normalizeBreakdownCategory(catRaw, VALID_CATEGORIES)
-              if (!validCat) return null
-              return { category: validCat, name }
-            })
-            .filter(Boolean) as Array<{ category: string; name: string }>
-        : []
-      let pageEighths = Number(scene.pageEighths)
-      if (!Number.isFinite(pageEighths) || pageEighths < 1) pageEighths = 8
-      if (pageEighths > 128) pageEighths = 128
-      pageEighths = Math.round(pageEighths)
-      const sceneNumber = String(scene.sceneNumber ?? '')
-      const hasCast = elements.some((el) => el.category === 'cast')
-      if (!hasCast && elements.length === 0) {
-        console.warn('[parse-script] Escena', sceneNumber, 'sin elementos ni cast')
-      } else if (!hasCast) {
-        console.warn('[parse-script] Escena', sceneNumber, 'sin cast en elements')
-      }
-      return {
-        ...scene,
-        sceneNumber: sceneNumber || undefined,
-        sceneHeading: scene.sceneHeading ?? scene.set ?? '',
-        scriptPage: typeof scene.scriptPage === 'number' ? scene.scriptPage : null,
-        pageEighths,
-        elements,
-      }
-    })
-
-    // Endurecer: si una escena no tiene cast, inferir desde synopsis o añadir placeholder
-    const synopsisKey = 'synopsis'
-    for (const scene of scenes) {
-      const elements = (scene as { elements?: Array<{ category: string; name: string }> }).elements ?? []
-      const hasCast = elements.some((el) => el.category === 'cast')
-      if (hasCast) continue
-      const synopsis = String((scene as Record<string, unknown>)[synopsisKey] ?? '').trim()
-      const inferred = inferCastFromSynopsis(synopsis)
-      const castToAdd = inferred.length > 0 ? inferred : ['Personaje (revisar)']
-      for (const name of castToAdd) {
-        elements.push({ category: 'cast', name: name.slice(0, 200) })
-      }
-      if (inferred.length === 0) {
-        console.warn('[parse-script] Escena sin cast: se añadió placeholder. Synopsis:', synopsis.slice(0, 80))
-      } else {
-        console.log('[parse-script] Escena sin cast: se inferieron', castToAdd.length, 'nombres desde synopsis')
+      for (const raw of rawScenes) {
+        const norm = normalizeRawScene(raw)
+        if (!norm) continue
+        const key = String(norm.sceneNumber)
+        const prev = merged.get(key)
+        merged.set(key, prev ? mergeSceneRow(prev, norm) : norm)
       }
     }
-
-    // Recalcular pageEighths por proporción de caracteres (reemplaza el valor de la IA)
-    const totalOctavos =
-      totalPages != null && totalPages > 0 ? totalPages * 8 : scenes.length * 4
-    const charCounts = scenes.map((s) => {
-      const syn = String((s as Record<string, unknown>).synopsis ?? '')
-      const names =
-        (s as { elements?: Array<{ name: string }> }).elements
-          ?.map((e) => e.name)
-          .join(' ') ?? ''
-      return syn.length + names.length
-    })
-    const totalChars = charCounts.reduce((a, b) => a + b, 0)
-    if (totalChars > 0) {
-      scenes = scenes.map((s, i) => ({
-        ...s,
-        pageEighths: Math.max(
-          1,
-          Math.round((charCounts[i]! / totalChars) * totalOctavos)
-        ),
-      })) as typeof scenes
-      const sumExceptLast = scenes
-        .slice(0, -1)
-        .reduce((a, s) => a + (s as { pageEighths: number }).pageEighths, 0)
-      const lastIdx = scenes.length - 1
-      if (lastIdx >= 0) {
-        scenes[lastIdx] = {
-          ...scenes[lastIdx],
-          pageEighths: Math.max(1, totalOctavos - sumExceptLast),
-        } as (typeof scenes)[number]
-      }
-    }
-
-    return NextResponse.json({ scenes })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    console.error('[parse-script] Exception:', e)
+    console.error('[parse-script] Error OpenAI:', message)
     return NextResponse.json(
       {
-        error: 'Error al parsear guion',
-        details: message,
-        hint: message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network')
-          ? 'Error de red. Comprueba conexión a internet y que api.openai.com sea accesible.'
-          : 'Revisa la consola del servidor (terminal donde corre npm run dev) para más detalle.',
+        error: 'Error de OpenAI o JSON inválido',
+        details: message.slice(0, 500),
+        hint: 'Revisa OPENAI_API_KEY y la consola del servidor.',
       },
-      { status: 500 }
+      { status: 502 }
     )
   }
+
+  let scenes = sortScenesForOutput([...merged.values()])
+
+  if (scenes.length === 0) {
+    return NextResponse.json(
+      { error: 'No se detectaron escenas.', hint: 'Comprueba que el texto tenga cabeceras INT./EXT.' },
+      { status: 502 }
+    )
+  }
+
+  if (isFeatureFilm && scenes.length > LONG_FEATURE_SCENES_CAP) {
+    scenes = scenes.slice(0, LONG_FEATURE_SCENES_CAP)
+  }
+
+  for (const scene of scenes) {
+    const elements =
+      (scene as { elements?: Array<{ category: string; name: string }> }).elements ?? []
+    const hasCast = elements.some((el) => el.category === 'cast')
+    if (hasCast) continue
+    const synopsis = String((scene as Record<string, unknown>).synopsis ?? '').trim()
+    const inferred = inferCastFromSynopsis(synopsis)
+    const castToAdd = inferred.length > 0 ? inferred : ['Personaje (revisar)']
+    for (const name of castToAdd) {
+      elements.push({ category: 'cast', name: name.slice(0, 200) })
+    }
+  }
+
+  if (totalPages != null) {
+    scalePageEighthsToTarget(scenes, totalPages * 8)
+  }
+
+  return NextResponse.json({ scenes })
 }

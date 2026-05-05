@@ -9,6 +9,7 @@ type CastMember = {
   actor_name: string | null
   availability_notes: string | null
   appearance_count?: number
+  appearance_scene_numbers?: string[]
 }
 
 export function CastSection({
@@ -78,7 +79,10 @@ export function CastSection({
                   Personaje
                 </th>
                 <th className="px-4 py-3 text-right font-medium text-foreground tabular-nums">
-                  Cantidad de apariciones
+                  Apariciones
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-foreground min-w-[180px]">
+                  Escenas
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-foreground">
                   Actor / Notas
@@ -89,7 +93,7 @@ export function CastSection({
               {castMembers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-4 py-6 text-center text-sm text-muted-foreground"
                   >
                     No hay personajes. El cast se genera desde el desglose al importar el guion o usar &quot;Rehacer desglose con IA&quot; en Desglose.
@@ -109,6 +113,11 @@ export function CastSection({
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {c.appearance_count ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground leading-snug max-w-md">
+                      {(c.appearance_scene_numbers?.length ?? 0) > 0
+                        ? c.appearance_scene_numbers!.join(', ')
+                        : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {c.actor_name ?? c.availability_notes ?? '—'}

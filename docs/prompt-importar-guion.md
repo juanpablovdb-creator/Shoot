@@ -1,6 +1,6 @@
-# Prompt para importar guion (API OpenAI / ChatGPT)
+# Prompt para importar guion (IA / API compatible)
 
-Este es el **system prompt** que usa la app al llamar a la API de OpenAI (modelo `gpt-4o-mini`) para desglosar un guion. El contenido del guion se envía como **user message** después de este system prompt.
+Este es el **system prompt** que usa la app para desglosar un guion con IA. El contenido del guion se envía como **user message** después de este system prompt.
 
 ---
 
@@ -71,8 +71,7 @@ Responde ÚNICAMENTE con el JSON: {"scenes": [ ... ]}. Cada escena con elements 
 
 - **Ruta:** `POST /api/parse-script`
 - **Body:** `{ "text": "<texto del guion>", "projectId": "<uuid opcional>" }`
-- **Modelo:** `gpt-4o-mini`
-- **Parámetros:** `temperature: 0.2`, `max_tokens: 16384`
+- **Parámetros típicos:** `temperature: 0.2`, `max_tokens: 16384` (definidos en el servidor)
 - La lista de categorías (`BREAKDOWN_CATEGORY_KEYS`) se inyecta en el system prompt donde dice "CATEGORÍAS PERMITIDAS".
 
-Si quieres usar este mismo prompt en ChatGPT o en otra herramienta, usa el system prompt de arriba y envía el texto del guion como primer mensaje de usuario. La respuesta debe ser solo el JSON con `{"scenes": [...]}`.
+Si quieres usar este mismo prompt en otro asistente de IA o herramienta, usa el system prompt de arriba y envía el texto del guion como primer mensaje de usuario. La respuesta debe ser solo el JSON con `{"scenes": [...]}`.

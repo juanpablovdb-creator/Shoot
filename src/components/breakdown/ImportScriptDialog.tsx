@@ -41,7 +41,6 @@ export function ImportScriptDialog({
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<number | null>(null)
   const [openaiCheck, setOpenaiCheck] = useState<string | null>(null)
-  const [useGpt4, setUseGpt4] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -103,16 +102,21 @@ export function ImportScriptDialog({
           body: JSON.stringify({
             text: extractedText,
             projectId,
-            useGpt4,
             ...(scriptTotalPages != null && { totalPages: scriptTotalPages }),
           }),
         })
       } else {
+        const estimatedPages = Math.max(1, Math.round(textToSend.length / 3000))
         res = await fetch('/api/parse-script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: textToSend, useGpt4 }),
+          body: JSON.stringify({
+            text: textToSend,
+            projectId,
+            totalPages: estimatedPages,
+          }),
         })
+        scriptTotalPages = estimatedPages
       }
 
       const data = await res.json() as {
@@ -207,10 +211,18 @@ export function ImportScriptDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Importar guion</DialogTitle>
-          <DialogDescription>
-            Sube un PDF o pega el texto. La IA hará el desglose tipo Movie Magic:
-            escenas con Set, INT/EXT, DÍA/NOCHE, sinopsis, páginas y elementos por
-            categoría.
+          <DialogDescription className="space-y-2 text-left">
+            <span className="block">
+              Sube un PDF o pega el texto. La IA hará el desglose tipo Movie Magic.
+              En guiones largos puede tardar varios minutos (varias pasadas por trozos de
+              escena completas).
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              <strong className="text-foreground">Extras</strong> = multitudes / atmósfera (
+              &quot;restaurante lleno&quot;).{' '}
+              <strong className="text-foreground">Figuración</strong> = bits con función (
+              mesero, taxista sin línea, etc.). Van en categorías distintas.
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -249,19 +261,9 @@ export function ImportScriptDialog({
             disabled={loading}
             rows={6}
           />
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useGpt4}
-              onChange={(e) => setUseGpt4(e.target.checked)}
-              disabled={loading}
-              className="rounded border-input"
-            />
-            <span className="text-sm">Usar GPT-4 (más preciso, más lento y costoso)</span>
-          </label>
           <p className="text-xs text-muted-foreground">
             <code className="rounded bg-muted px-1">OPENAI_API_KEY</code> en
-            .env.local (GPT-4o-mini por defecto; GPT-4o si marcas la opción).
+            .env.local para usar la IA de parseo del guion.
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -276,7 +278,7 @@ export function ImportScriptDialog({
                   const r = await fetch('/api/health/openai')
                   const d = await r.json()
                   if (d.ok) {
-                    setOpenaiCheck(`OK. Tokens usados: ${d.usage?.total_tokens ?? '—'}. Debería aparecer en Usage de OpenAI.`)
+                    setOpenaiCheck(`OK. Tokens usados: ${d.usage?.total_tokens ?? '—'}. El uso puede tardar unos minutos en verse en el panel del proveedor.`)
                   } else {
                     setOpenaiCheck(`Error: ${d.error ?? d.details ?? 'sin detalles'}. ${d.hint ?? ''}`)
                   }
@@ -285,7 +287,7 @@ export function ImportScriptDialog({
                 }
               }}
             >
-              Comprobar OpenAI
+              Comprobar IA (servidor)
             </Button>
             {openaiCheck && (
               <span className="text-xs text-muted-foreground">{openaiCheck}</span>

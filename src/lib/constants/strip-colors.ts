@@ -5,7 +5,7 @@ import type { IntExt, DayNight } from '@/types'
  * - INT/DÍA = blanco
  * - EXT/DÍA = amarillo
  * - INT/NOCHE = azul
- * - EXT/NOCHE = verde
+ * - EXT/NOCHE = azul oscuro (legibilidad stripboard)
  */
 export type StripColorKey =
   | 'int_day'
@@ -35,8 +35,8 @@ export const STRIP_COLORS: Record<
     textColor: '#FFFFFF',
   },
   ext_night: {
-    bg: '#2E7D32',
-    bgStrip: '#E8F5E9',
+    bg: '#0D47A1',
+    bgStrip: '#E8EAF6',
     label: 'EXT/NOCHE',
     textColor: '#FFFFFF',
   },

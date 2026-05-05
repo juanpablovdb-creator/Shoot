@@ -16,7 +16,10 @@ import {
 } from '@/components/ui/card'
 
 const REDIRECT_URL_HELP =
-  'Añade en Supabase (Authentication → URL Configuration → Redirect URLs): http://localhost:3000/auth/callback o http://localhost:3000/**'
+  'Supabase → Authentication → URL Configuration: añade Redirect URLs con tu URL (ej. http://localhost:3000/auth/callback y la URL de producción).'
+
+const GOOGLE_OAUTH_HELP =
+  'Si Google no abre o falla: en Supabase activa el proveedor Google con Client ID y Secret de Google Cloud Console (OAuth 2.0). Orígenes autorizados: tu dominio. Supabase suele mostrar la «Callback URL» a pegar en Google.'
 
 export default function LoginClient() {
   const searchParams = useSearchParams()
@@ -83,6 +86,7 @@ export default function LoginClient() {
         >
           Continuar con Google
         </Button>
+        <p className="mt-2 text-xs text-muted-foreground leading-snug">{GOOGLE_OAUTH_HELP}</p>
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
           <span className="text-xs text-muted-foreground">o</span>

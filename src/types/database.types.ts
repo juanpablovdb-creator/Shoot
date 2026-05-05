@@ -8,6 +8,7 @@ export type ProjectType =
   | 'novela'
   | 'largometraje_service'
   | 'largometraje_nacional'
+  | 'cortometraje'
 
 export type IntExt = 'INT' | 'EXT'
 export type DayNight = 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER'
@@ -16,6 +17,7 @@ export type DayNight = 'DÍA' | 'NOCHE' | 'AMANECER' | 'ATARDECER'
 export type BreakdownCategoryKey =
   | 'cast'
   | 'extras'
+  | 'figuracion'
   | 'stunts'
   | 'spfx'
   | 'vfx'

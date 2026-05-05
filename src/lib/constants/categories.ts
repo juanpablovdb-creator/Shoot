@@ -10,8 +10,13 @@ export const BREAKDOWN_CATEGORIES: Record<
 > = {
   cast: { color: '#FF0000', label: 'Cast', impactsBudget: true },
   extras: {
-    color: '#FFFF00',
-    label: 'Extras / fig.',
+    color: '#FFEB3B',
+    label: 'Extras',
+    impactsBudget: true,
+  },
+  figuracion: {
+    color: '#F9A825',
+    label: 'Figuración',
     impactsBudget: true,
   },
   stunts: { color: '#FF00FF', label: 'Stunts', impactsBudget: true },

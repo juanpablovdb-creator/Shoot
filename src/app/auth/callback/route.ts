@@ -15,7 +15,12 @@ export async function GET(request: NextRequest) {
   let response = NextResponse.redirect(new URL(next.startsWith('/') ? next : '/', request.url))
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set(
+      'error',
+      'Inicio de sesión cancelado o falta el código OAuth. Revisa Redirect URLs en Supabase y la URL de callback en Google Cloud.'
+    )
+    return NextResponse.redirect(loginUrl)
   }
 
   const supabase = createServerClient(url, key, {
