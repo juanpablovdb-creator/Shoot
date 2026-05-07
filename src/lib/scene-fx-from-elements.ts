@@ -25,6 +25,13 @@ export function sceneHasFxCategory(
   const els = sceneElements ?? []
   const hasLinkedElements = els.some((e) => getCategoryFromSceneElement(e) != null)
   if (hasLinkedElements) {
+    if (category === 'spfx') {
+      // En la UI, "SFX" incluye efectos prácticos y cues de sonido del guion.
+      return els.some((e) => {
+        const c = getCategoryFromSceneElement(e)
+        return c === 'spfx' || c === 'sonido'
+      })
+    }
     return els.some((e) => getCategoryFromSceneElement(e) === category)
   }
   return Boolean(dbFlag)

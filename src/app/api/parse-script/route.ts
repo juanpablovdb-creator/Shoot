@@ -125,6 +125,13 @@ CAST (obligatorio en cada escena — crítico):
 - Debes leer el TEXTO COMPLETO de la escena en este fragmento: desde la cabecera INT./EXT. hasta justo antes de la siguiente cabecera. Eso incluye líneas tras saltos de página, "(CONTINUED)", números de página o "OMITIDO" en PDF: el reparto debe reflejar a TODOS los personajes con diálogo o acción en cualquier parte de ese bloque, no solo la primera página.
 - Mismo nombre de personaje en todas las escenas para que el sistema cuente apariciones.
 
+UTILERÍA / VESTUARIO / SONIDO / MÚSICA (crítico):
+- No te quedes solo con cast, stunts y FX. Si en el texto de la escena aparece un OBJETO, PRENDA, FUENTE DE SONIDO o CANCIÓN, DEBES incluirlo en elements.
+- utileria: objetos que se usan o se mencionan explícitamente (p.ej. "máquina de oxígeno", "radio", "casete", "maletas", "cinturón", "plato de almuerzo").
+- vestuario: uniformes y prendas visibles/relevantes (p.ej. "uniforme del colegio", "uniforme", "bata", "traje", "disfraz"). Si el guion dice "uniforme del colegio", incluye "Uniforme del colegio".
+- sonido: fuentes de sonido en escena (p.ej. "sonido de la máquina de oxígeno", "ruido", "sirena", "televisor encendido", "radio suena").
+- musica: música diegética o mencionada por título/intérprete (p.ej. "suena una canción", "MELODÍA DEL RÍO de Ibrahim Ferrer"). Si se menciona un título o artista, inclúyelo tal cual.
+
 STUNTS / SPFX / VFX:
 - stunts: cualquier acción física riesgosa o coreografiada (peleas, caídas, cascadas, conducción peligrosa, abordaje, persecución a pie…).
 - spfx: efectos en set (humo, lluvia, sangre práctica, explosión en cámara…).
@@ -137,7 +144,9 @@ EXTRAS vs FIGURACIÓN (categorías distintas):
 
 CATEGORÍAS (claves exactas, minúsculas): ${categoriesList}
 
-Incluye stunts, spfx, vfx cuando haya acción física, efectos prácticos o digitales.
+REGLA DE ORO:
+- Si en la escena aparece o se menciona música/sonido/objeto/vestuario, inclúyelo SIEMPRE en su categoría (musica, sonido, utileria, vestuario).
+- Si dudas, incluye el elemento (mejor más completo que incompleto).
 
 Responde solo con el JSON.`
 }

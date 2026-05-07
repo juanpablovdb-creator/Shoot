@@ -103,7 +103,7 @@ export interface CastMember {
   character_name: string
   cast_number: number
   actor_name: string | null
-  availability_notes: string | null
+  notes: string | null
   created_at: string
   updated_at: string
 }

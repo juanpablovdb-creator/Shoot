@@ -4,11 +4,15 @@ export function ProductionComplexityBanner({
   stuntScenes,
   sfxScenes,
   vfxScenes,
+  complexityLevel,
+  avgNonCastElementsPerScene,
 }: {
   totalScenes: number
   stuntScenes: number
   sfxScenes: number
   vfxScenes: number
+  complexityLevel: 'Bajo' | 'Medio' | 'Alto'
+  avgNonCastElementsPerScene: number
 }) {
   if (totalScenes === 0) return null
   if (stuntScenes === 0 && sfxScenes === 0 && vfxScenes === 0) return null
@@ -23,16 +27,20 @@ export function ProductionComplexityBanner({
         Conteo por escenas que tienen al menos un elemento en cada categoría (stunts, SPFX o VFX) en el
         desglose.
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-amber-900/90 dark:text-amber-100/90">
+        <span>
+          Nivel: <strong>{complexityLevel}</strong>
+        </span>
+        <span className="text-xs">
+          Promedio elementos/escena (sin cast):{' '}
+          <strong className="tabular-nums">{avgNonCastElementsPerScene}</strong>
+        </span>
+      </div>
       <ul className="mt-2 flex list-none flex-wrap gap-x-6 gap-y-1 text-amber-900/90 dark:text-amber-100/90">
         {stuntScenes > 0 && (
           <li>
             Stunts: <strong className="tabular-nums">{stuntScenes}</strong> escena
             {stuntScenes !== 1 ? 's' : ''}
-          </li>
-        )}
-        {sfxScenes > 0 && (
-          <li>
-            SPFX: <strong className="tabular-nums">{sfxScenes}</strong> escena{sfxScenes !== 1 ? 's' : ''}
           </li>
         )}
         {vfxScenes > 0 && (
@@ -42,8 +50,7 @@ export function ProductionComplexityBanner({
         )}
       </ul>
       <p className="mt-2 text-xs text-amber-900/80 dark:text-amber-100/80">
-        Si un número te sorprende, abre el desglose de la escena y revisa la lista de elementos; los
-        checks del stripboard usan la misma lógica cuando hay elementos vinculados.
+        Puedes editar cualquier elemento desde la pestaña de Elementos.
       </p>
     </div>
   )

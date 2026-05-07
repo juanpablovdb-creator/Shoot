@@ -16,7 +16,6 @@ const nav = [
   { href: 'breakdown', label: 'Desglose', icon: FileText },
   { href: 'elements', label: 'Elementos', icon: LayoutGrid },
   { href: 'cast', label: 'Cast', icon: Users },
-  { href: 'locations', label: 'Sets', icon: MapPin },
   { href: 'stripboard', label: 'Stripboard', icon: LayoutGrid },
   { href: 'calendar', label: 'Calendario', icon: Calendar },
 ]

@@ -32,6 +32,9 @@ export function normalizeBreakdownCategory(
   const cat = String(raw ?? '')
     .toLowerCase()
     .trim()
+    // Quitar tildes/acentos para que "música" → "musica"
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
     .replace(/\s+/g, '_')
   const key = (ALIASES[cat] ?? cat) as string
   if (!valid.has(key)) return null

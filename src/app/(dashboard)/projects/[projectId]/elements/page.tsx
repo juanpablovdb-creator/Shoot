@@ -4,12 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import {
   BREAKDOWN_CATEGORIES,
-  BREAKDOWN_CATEGORY_ORDER,
 } from '@/lib/constants/categories'
 import { getCastFromBreakdown } from '@/lib/sync-cast'
 import type { BreakdownCategoryKey } from '@/types'
-import { buttonVariants } from '@/components/ui/button-variants'
-import { cn } from '@/lib/utils'
+import { ElementsCategoriesGrid, type ElementsCategoryCard } from '@/components/elements/ElementsCategoriesGrid'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,83 +42,59 @@ export default async function ElementsPage({
 
   const castByAppearance = await getCastFromBreakdown(supabase, projectId)
 
+  const { data: sets } = await supabase
+    .from('sets')
+    .select('id, name')
+    .eq('project_id', projectId)
+    .order('name', { ascending: true })
+
+  const castItems =
+    castByAppearance.length > 0
+      ? castByAppearance.map((c) => `${c.cast_number}. ${c.character_name}`)
+      : []
+  const setItems = (sets ?? []).map((s) => s.name).filter(Boolean)
+
+  const allCategoryKeys = (Object.keys(BREAKDOWN_CATEGORIES) as BreakdownCategoryKey[]).filter(
+    (k) => k !== 'cast'
+  )
+  const allItems: ElementsCategoryCard[] = [
+    {
+      key: 'cast',
+      label: 'Cast',
+      href: `/projects/${projectId}/cast`,
+      items: castItems,
+    },
+    {
+      key: 'sets',
+      label: 'Sets',
+      href: `/projects/${projectId}/locations`,
+      items: setItems,
+    },
+    ...allCategoryKeys.map((key) => {
+      const raw = byCategoryKey[key] ?? []
+      const items =
+        key === 'stunts'
+          ? raw.map((name, i) => `${101 + i}. ${name}`)
+          : key === 'figuracion'
+            ? raw.map((name, i) => `${200 + i}. ${name}`)
+            : raw
+      return {
+        key,
+        label: BREAKDOWN_CATEGORIES[key].label,
+        href: `/projects/${projectId}/elements/category/${key}`,
+        items,
+      }
+    }),
+  ]
+
   return (
     <>
       <PageHeader
         title="Elementos"
-        description="Todas las categorías de desglose. Las que aún no tienen ítems aparecen vacías: no es WIP, simplemente el guion no los ha detectado o aún no los añadiste."
+        description="Todas las categorías del desglose."
       />
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Link
-          href={`/projects/${projectId}/breakdown`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Desglose
-        </Link>
-        <Link
-          href={`/projects/${projectId}/cast`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Cast
-        </Link>
-        <Link
-          href={`/projects/${projectId}/stripboard`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Stripboard
-        </Link>
-        <Link
-          href={`/projects/${projectId}/locations`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Sets
-        </Link>
-        <a
-          href={`/api/projects/${projectId}/export/breakdown-csv`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Exportar desglose CSV
-        </a>
-        <a
-          href={`/api/projects/${projectId}/export/cast-csv`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-        >
-          Exportar cast CSV
-        </a>
-      </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {BREAKDOWN_CATEGORY_ORDER.map((key) => {
-          const label = BREAKDOWN_CATEGORIES[key as BreakdownCategoryKey].label
-          const items =
-            key === 'cast' && castByAppearance.length > 0
-              ? castByAppearance.map((c) => `${c.cast_number}. ${c.character_name}`)
-              : (byCategoryKey[key] ?? [])
-          return (
-            <div key={key} className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-semibold text-foreground">{label}</h3>
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {items.length} ítem{items.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <Link
-                href={`/projects/${projectId}/elements/category/${key}`}
-                className="mt-2 inline-block text-xs font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Ver en qué escenas aparece →
-              </Link>
-              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-sm text-muted-foreground">
-                {items.length === 0 ? (
-                  <li className="italic text-xs">Sin elementos en esta categoría.</li>
-                ) : (
-                  items.map((name, i) => (
-                    <li key={`${key}-${i}-${name.slice(0, 40)}`}>{name}</li>
-                  ))
-                )}
-              </ul>
-            </div>
-          )
-        })}
+      <div className="mt-6">
+        <ElementsCategoriesGrid items={allItems} storageKey={`elements-order:${projectId}`} />
       </div>
     </>
   )

@@ -14,7 +14,7 @@ export type CastMemberRow = {
   character_name: string
   cast_number: number
   actor_name: string | null
-  availability_notes: string | null
+  notes: string | null
   /** Número de escenas en que aparece el personaje. */
   appearance_count?: number
   /** Números de escena donde aparece (orden de guion). */
@@ -101,7 +101,7 @@ export async function getCastFromBreakdown(
   const PLACEHOLDER_CAST_NAME = 'Personaje (revisar)'
   const { data: castMembers } = await supabase
     .from('cast_members')
-    .select('id, character_name')
+    .select('id, character_name, actor_name, notes')
     .eq('project_id', projectId)
     .order('character_name', { ascending: true })
   if (!castMembers?.length) return []
@@ -168,8 +168,12 @@ export async function getCastFromBreakdown(
     id: g.id,
     character_name: g.character_name || 'Sin nombre',
     cast_number: i + 1,
-    actor_name: null,
-    availability_notes: null,
+    actor_name:
+      (castMembers as Array<{ id: string; actor_name?: string | null }>).find((c) => c.id === g.id)
+        ?.actor_name ?? null,
+    notes:
+      (castMembers as Array<{ id: string; notes?: string | null }>).find((c) => c.id === g.id)
+        ?.notes ?? null,
     appearance_count: g.appearance_count,
     appearance_scene_numbers: g.appearance_scene_numbers,
   }))

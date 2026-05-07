@@ -53,7 +53,7 @@ export async function GET(
         c.character_name ?? '',
         String(c.appearance_count ?? ''),
         (c.appearance_scene_numbers ?? []).join(', '),
-        c.actor_name ?? c.availability_notes ?? '',
+        c.actor_name ?? c.notes ?? '',
       ])
     }
 

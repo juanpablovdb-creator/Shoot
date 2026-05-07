@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/shared/Sidebar'
+import { RouteProgress } from '@/components/shared/RouteProgress'
 
 /** Evita mostrar el shell del dashboard sin sesión (p. ej. si el middleware no corre por env). */
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <RouteProgress />
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-6 py-8 lg:px-8">

@@ -83,8 +83,8 @@ export default async function LocationsPage({
   return (
     <>
       <PageHeader
-        title="Sets"
-        description="Sets y locaciones de rodaje del proyecto. Cada escena lleva cabecera/set en el Desglose; desde Elementos puedes ver otras categorías (arte, utilería…) por escena."
+        title="Locaciones y sets"
+        description="Primero añade locaciones (país/ciudad/dirección). Después crea y vincula sets a esas locaciones. Una locación puede tener más de un set."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link

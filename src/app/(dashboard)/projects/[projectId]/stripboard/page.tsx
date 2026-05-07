@@ -111,6 +111,15 @@ export default async function StripboardPage({
     const sceneEls = Array.isArray(sceneElsRaw) ? sceneElsRaw : []
     const getBe = (se: Record<string, unknown>) =>
       (se.breakdown_elements ?? se.breakdown_element) as { name?: string; category?: string } | null | undefined
+
+    const categoriesInScene = new Set(
+      sceneEls
+        .map(getBe)
+        .map((be) => String(be?.category ?? '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+    const hasExtras = categoriesInScene.has('extras')
+    const hasBits = categoriesInScene.has('figuracion')
     const castFromElements = sceneEls
       .map(getBe)
       .filter((be): be is { name: string; category: string } => be?.category === 'cast' && !!be?.name)
@@ -142,6 +151,8 @@ export default async function StripboardPage({
       has_stunts: sceneHasFxCategory(scene.scene_elements, 'stunts', scene.has_stunts),
       has_sfx: sceneHasFxCategory(scene.scene_elements, 'spfx', scene.has_sfx),
       has_vfx: sceneHasFxCategory(scene.scene_elements, 'vfx', scene.has_vfx),
+      has_extras: hasExtras,
+      has_bits: hasBits,
       castNumbers,
       stuntNumbers,
       castNames,

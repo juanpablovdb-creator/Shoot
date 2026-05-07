@@ -16,7 +16,7 @@ export const BREAKDOWN_CATEGORIES: Record<
   },
   figuracion: {
     color: '#F9A825',
-    label: 'Figuración',
+    label: 'Figurantes',
     impactsBudget: true,
   },
   stunts: { color: '#FF00FF', label: 'Stunts', impactsBudget: true },

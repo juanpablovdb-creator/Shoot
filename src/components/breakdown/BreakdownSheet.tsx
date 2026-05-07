@@ -8,8 +8,9 @@ import { buttonVariants } from '@/components/ui/button'
 import { BREAKDOWN_CATEGORIES } from '@/lib/constants/categories'
 import { sceneHasFxCategory } from '@/lib/scene-fx-from-elements'
 import { cn } from '@/lib/utils'
-import { Download, Layers, Plus } from 'lucide-react'
+import { Layers, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { BreakdownDownloadsDialog } from './BreakdownDownloadsDialog'
 
 interface SceneRow {
   id: string
@@ -110,46 +111,13 @@ export function BreakdownSheet({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={`/projects/${projectId}/elements`}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
-          >
-            Elementos
-          </Link>
-          <Link
-            href={`/projects/${projectId}/cast`}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
-          >
-            Cast
-          </Link>
-          <Link
-            href={`/projects/${projectId}/stripboard`}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
-          >
-            Stripboard
-          </Link>
-          <Link
             href={`/projects/${projectId}/locations`}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
           >
             Sets
           </Link>
           <ImportScriptDialog projectId={projectId} />
-          <a
-            href={`/api/projects/${projectId}/export/breakdown-csv`}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-            download
-          >
-            <Download className="size-4" />
-            Desglose CSV
-          </a>
-          <a
-            href={`/api/projects/${projectId}/export/cast-csv`}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-            download
-          >
-            <Download className="size-4" />
-            Cast CSV
-          </a>
+          <BreakdownDownloadsDialog projectId={projectId} />
           <Link
             href={`/projects/${projectId}/breakdown/new`}
             className={cn(buttonVariants({ size: 'sm' }))}

@@ -20,6 +20,8 @@ export interface StripRowData {
   has_stunts: boolean
   has_sfx: boolean
   has_vfx: boolean
+  has_extras?: boolean
+  has_bits?: boolean
   /** Números de cast (actores, &lt; 100) */
   castNumbers: number[]
   /** Números de stunts (coordinador 100, etc.) */
@@ -58,6 +60,8 @@ export function StripRow({
   has_stunts,
   has_sfx,
   has_vfx,
+  has_extras = false,
+  has_bits = false,
   castNumbers,
   stuntNumbers,
   castNames,
@@ -85,6 +89,8 @@ export function StripRow({
     `STU ${has_stunts ? '✓' : '—'}`,
     `SFX ${has_sfx ? '✓' : '—'}`,
     `VFX ${has_vfx ? '✓' : '—'}`,
+    `EXT ${has_extras ? '✓' : '—'}`,
+    `BITS ${has_bits ? '✓' : '—'}`,
   ].join(' ')
 
   const rowClass = cn(
