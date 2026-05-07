@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { BREAKDOWN_CATEGORIES, BREAKDOWN_CATEGORY_KEYS } from '@/lib/constants/categories'
-import { createPdfContext, drawHeader, drawTextBlock, pdfToBuffer, safeFilename } from '@/lib/pdf-export'
+import { createPdfContext, drawHeader, drawTextBlock, pdfToBytes, safeFilename } from '@/lib/pdf-export'
 import type { BreakdownCategoryKey } from '@/types'
 
 function formatEighths(eighths: number): string {
@@ -124,10 +124,14 @@ export async function POST(
       ctx.y -= 10
     }
 
-    const pdf = await pdfToBuffer(ctx.pdf)
+    const pdf = await pdfToBytes(ctx.pdf)
+    const pdfBody = pdf.buffer.slice(
+      pdf.byteOffset,
+      pdf.byteOffset + pdf.byteLength
+    ) as ArrayBuffer
 
     const filename = `desglose-${safeFilename(project.name ?? 'proyecto')}.pdf`
-    return new NextResponse(pdf, {
+    return new Response(pdfBody, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

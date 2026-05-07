@@ -111,9 +111,8 @@ export function drawTextBlock(ctx: PdfContext, text: string, opts: { size?: numb
   }
 }
 
-export async function pdfToBuffer(pdf: PDFDocument): Promise<Buffer> {
-  const bytes = await pdf.save()
-  return Buffer.from(bytes)
+export async function pdfToBytes(pdf: PDFDocument): Promise<Uint8Array> {
+  return await pdf.save()
 }
 
 export function safeFilename(name: string) {

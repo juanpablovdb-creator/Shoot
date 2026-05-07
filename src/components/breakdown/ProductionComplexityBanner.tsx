@@ -5,14 +5,14 @@ export function ProductionComplexityBanner({
   sfxScenes,
   vfxScenes,
   complexityLevel,
-  avgNonCastElementsPerScene,
+  avgElementsPerScene,
 }: {
   totalScenes: number
   stuntScenes: number
   sfxScenes: number
   vfxScenes: number
   complexityLevel: 'Bajo' | 'Medio' | 'Alto'
-  avgNonCastElementsPerScene: number
+  avgElementsPerScene: number
 }) {
   if (totalScenes === 0) return null
   if (stuntScenes === 0 && sfxScenes === 0 && vfxScenes === 0) return null
@@ -32,8 +32,8 @@ export function ProductionComplexityBanner({
           Nivel: <strong>{complexityLevel}</strong>
         </span>
         <span className="text-xs">
-          Promedio elementos/escena (sin cast):{' '}
-          <strong className="tabular-nums">{avgNonCastElementsPerScene}</strong>
+          Promedio elementos/escena:{' '}
+          <strong className="tabular-nums">{avgElementsPerScene}</strong>
         </span>
       </div>
       <ul className="mt-2 flex list-none flex-wrap gap-x-6 gap-y-1 text-amber-900/90 dark:text-amber-100/90">

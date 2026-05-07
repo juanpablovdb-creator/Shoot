@@ -51,20 +51,19 @@ export default async function BreakdownPage({
 
   const scenes = scenesResult.data ?? []
   const { stuntScenes, sfxScenes, vfxScenes } = countScenesByFxCategories(scenes)
-  const avgNonCastElementsPerScene = scenes.length
+  const avgElementsPerScene = scenes.length
     ? Math.round(
         (scenes.reduce((acc, s) => {
           const els = (s.scene_elements ?? []) as Array<{
             breakdown_elements?: { category?: string } | null
           }>
-          const nonCast = els.filter((e) => e.breakdown_elements?.category !== 'cast').length
-          return acc + nonCast
+          return acc + els.length
         }, 0) / scenes.length) * 10
       ) / 10
     : 0
 
   const complexityLevel =
-    avgNonCastElementsPerScene > 8 ? 'Alto' : avgNonCastElementsPerScene >= 3 ? 'Medio' : 'Bajo'
+    avgElementsPerScene > 8 ? 'Alto' : avgElementsPerScene >= 3 ? 'Medio' : 'Bajo'
   // Por nombre base (ej. "Abuelo" y "Abuelo (74)" → mismo personaje) para mostrar apariciones en el desglose
   const castAppearanceCountsByName: Record<string, number> = {}
   const castByBaseName: Record<string, { cast_number: number; character_name: string }> = {}
@@ -92,7 +91,7 @@ export default async function BreakdownPage({
           sfxScenes={sfxScenes}
           vfxScenes={vfxScenes}
           complexityLevel={complexityLevel}
-          avgNonCastElementsPerScene={avgNonCastElementsPerScene}
+          avgElementsPerScene={avgElementsPerScene}
         />
       </div>
       <div className="mt-6">
