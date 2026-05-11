@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getOAuthRedirectOrigin } from '@/lib/supabase/oauth-redirect-origin'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -66,7 +67,7 @@ export default function LoginClient() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${getOAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       })
       if (error) {

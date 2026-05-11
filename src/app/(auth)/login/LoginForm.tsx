@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getOAuthRedirectOrigin } from '@/lib/supabase/oauth-redirect-origin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/card'
 
 const REDIRECT_URL_HELP =
-  'Añade en Supabase (Authentication → URL Configuration → Redirect URLs): http://localhost:3000/auth/callback o http://localhost:3000/**'
+  'En Supabase → Authentication → URL Configuration → Redirect URLs, incluye la URL exacta de esta pestaña (mismo host y puerto), p. ej. http://localhost:3001/auth/callback. localhost y 127.0.0.1 cuentan como sitios distintos.'
 
 export function LoginForm() {
   const searchParams = useSearchParams()
@@ -37,7 +38,7 @@ export function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${getOAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       })
       if (error) {

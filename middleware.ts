@@ -23,6 +23,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // OAuth return: must not run getUser()/session refresh here — it can clear PKCE
+  // verifier cookies before /auth/callback exchanges the code (see @supabase/ssr).
+  if (pathname.startsWith('/auth/callback')) {
+    return NextResponse.next({ request })
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
