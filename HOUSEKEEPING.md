@@ -39,7 +39,7 @@ Estado del proyecto y enlaces útiles para seguir trabajando.
 
 - Cliente: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Servidor (APIs): además `SUPABASE_SERVICE_ROLE_KEY` (y en `next.config.ts` si hace falta para inyección).
-- IA: `OPENAI_API_KEY` (opcional, para importar guion).
+- IA: `ANTHROPIC_API_KEY` (opcional, para importar guion con Claude).
 
 ---
 

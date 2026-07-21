@@ -40,7 +40,7 @@ export function ImportScriptDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<number | null>(null)
-  const [openaiCheck, setOpenaiCheck] = useState<string | null>(null)
+  const [aiCheck, setAiCheck] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -262,7 +262,7 @@ export function ImportScriptDialog({
             rows={6}
           />
           <p className="text-xs text-muted-foreground">
-            <code className="rounded bg-muted px-1">OPENAI_API_KEY</code> en
+            <code className="rounded bg-muted px-1">ANTHROPIC_API_KEY</code> en
             .env.local para usar la IA de parseo del guion.
           </p>
           <div className="flex items-center gap-2">
@@ -273,24 +273,24 @@ export function ImportScriptDialog({
               className="text-xs"
               disabled={loading}
               onClick={async () => {
-                setOpenaiCheck(null)
+                setAiCheck(null)
                 try {
-                  const r = await fetch('/api/health/openai')
+                  const r = await fetch('/api/health/anthropic')
                   const d = await r.json()
                   if (d.ok) {
-                    setOpenaiCheck(`OK. Tokens usados: ${d.usage?.total_tokens ?? '—'}. El uso puede tardar unos minutos en verse en el panel del proveedor.`)
+                    setAiCheck(`OK. Tokens usados: ${d.usage?.total_tokens ?? '—'}. El uso puede tardar unos minutos en verse en el panel del proveedor.`)
                   } else {
-                    setOpenaiCheck(`Error: ${d.error ?? d.details ?? 'sin detalles'}. ${d.hint ?? ''}`)
+                    setAiCheck(`Error: ${d.error ?? d.details ?? 'sin detalles'}. ${d.hint ?? ''}`)
                   }
                 } catch (e) {
-                  setOpenaiCheck(`No se pudo conectar: ${e instanceof Error ? e.message : String(e)}. ¿Servidor en marcha (npm run dev)?`)
+                  setAiCheck(`No se pudo conectar: ${e instanceof Error ? e.message : String(e)}. ¿Servidor en marcha (npm run dev)?`)
                 }
               }}
             >
               Comprobar IA (servidor)
             </Button>
-            {openaiCheck && (
-              <span className="text-xs text-muted-foreground">{openaiCheck}</span>
+            {aiCheck && (
+              <span className="text-xs text-muted-foreground">{aiCheck}</span>
             )}
           </div>
           {error && (

@@ -4,13 +4,42 @@ import { BREAKDOWN_CATEGORY_KEYS } from '@/lib/constants/categories'
 import { normalizeBreakdownCategory } from '@/lib/breakdown-category'
 import { inferCastFromSynopsis } from '@/lib/infer-cast-from-synopsis'
 import { parseSceneNumber } from '@/types'
-import { batchBlocksForLlm, splitScriptIntoSceneBlocks } from '@/lib/script-scene-chunks'
+import { batchBlocksForLlm, isSceneBlock, splitScriptIntoSceneBlocks } from '@/lib/script-scene-chunks'
 
 const VALID_CATEGORIES = new Set<string>(BREAKDOWN_CATEGORY_KEYS)
 
 /** Texto de guion por llamada: trozos por cabecera de escena, sin cortar a mitad de escena. */
 const MAX_USER_CHUNK_CHARS = 44_000
 const LONG_FEATURE_SCENES_CAP = 20
+
+/** Promedio de palabras por página de guion (formato estándar) cuando no conocemos totalPages. */
+const WORDS_PER_PAGE = 220
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length
+}
+
+/**
+ * Octavos por escena calculados en el servidor: cada escena recibe una parte de los
+ * octavos totales proporcional a sus palabras. Determinista, no depende del LLM.
+ */
+function computeEighthsFromBlocks(sceneBlocks: string[], totalPages: number | null): number[] {
+  const words = sceneBlocks.map(countWords)
+  const totalWords = words.reduce((a, b) => a + b, 0)
+  if (totalWords === 0) return sceneBlocks.map(() => 1)
+  const totalEighths =
+    totalPages != null && totalPages > 0
+      ? totalPages * 8
+      : Math.max(sceneBlocks.length, Math.round((totalWords / WORDS_PER_PAGE) * 8))
+  const out = words.map((w) => Math.max(1, Math.round((w / totalWords) * totalEighths)))
+  // Corregir el redondeo acumulado sobre la escena más larga
+  const drift = totalEighths - out.reduce((a, b) => a + b, 0)
+  if (drift !== 0) {
+    const idxMax = words.indexOf(Math.max(...words))
+    out[idxMax] = Math.max(1, out[idxMax]! + drift)
+  }
+  return out
+}
 
 function dedupeElements(els: Array<{ category: string; name: string }>) {
   const seen = new Set<string>()
@@ -33,6 +62,28 @@ function sortScenesForOutput(scenes: Array<Record<string, unknown>>) {
   })
 }
 
+/**
+ * Acepta octavos en varios formatos del modelo: 11, "11", "11/8", "1 3/8",
+ * o fracción de página (0.375 → 3 octavos). Devuelve null si no es interpretable.
+ */
+function coercePageEighths(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw >= 1) return Math.round(raw)
+    if (raw > 0) return Math.max(1, Math.round(raw * 8))
+    return null
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim().replace(/\s*(octavos?|oct\.?|págs?\.?|paginas?|páginas?)\s*$/i, '')
+    let m = s.match(/^(\d+)\s+(\d+)\s*\/\s*8$/)
+    if (m) return Number(m[1]) * 8 + Number(m[2])
+    m = s.match(/^(\d+)\s*\/\s*8$/)
+    if (m) return Number(m[1])
+    const n = Number(s)
+    if (Number.isFinite(n)) return coercePageEighths(n)
+  }
+  return null
+}
+
 function normalizeRawScene(s: unknown): Record<string, unknown> | null {
   const scene = s as Record<string, unknown>
   const elements = Array.isArray(scene.elements)
@@ -47,10 +98,8 @@ function normalizeRawScene(s: unknown): Record<string, unknown> | null {
         })
         .filter(Boolean) as Array<{ category: string; name: string }>
     : []
-  let pageEighths = Number(scene.pageEighths)
-  if (!Number.isFinite(pageEighths) || pageEighths < 1) pageEighths = 8
+  let pageEighths = coercePageEighths(scene.pageEighths) ?? 8
   if (pageEighths > 240) pageEighths = 240
-  pageEighths = Math.round(pageEighths)
   const sceneNumber = String(scene.sceneNumber ?? '').trim()
   if (!sceneNumber) return null
   return {
@@ -101,6 +150,12 @@ Recibes solo el fragmento ${chunkIndex + 1} de ${chunkTotal} del guion. Devuelve
       ? `El guion completo tiene ${totalPages} páginas (${totalPages * 8} octavos en total). Para cada escena, pageEighths debe ser el TOTAL de octavos de esa escena completa: desde su cabecera hasta la siguiente, incluyendo todo diálogo y acción aunque cruce varias hojas (ej. 5/8 en una hoja y 6/8 en la otra = 11 octavos → pageEighths: 11).`
       : 'Para cada escena, pageEighths (entero) = octavos totales en todo el cuerpo de la escena; si cruza páginas, SUMa los octavos de cada parte (cada página = 8 octavos).'
 
+  const octavosEstimate = `
+- pageEighths es un NÚMERO ENTERO JSON (ej. 3), nunca string ni fracción tipo "3/8" ni decimal de página.
+- Estima por la LONGITUD REAL del texto de la escena: 1 página de guion ≈ 55 líneas ≈ 8 octavos, así que cada ~7 líneas de texto ≈ 1 octavo (mínimo 1).
+  * 1–7 líneas → 1; ~14 líneas → 2; ~28 líneas (media página) → 4; ~55 líneas (página llena) → 8; ~83 líneas → 12; ~110 líneas (2 páginas) → 16.
+- Las escenas de un guion real VARÍAN de longitud: es un ERROR devolver el mismo pageEighths (p.ej. 8) para todas. Una escena de pocas líneas NUNCA es 8.`
+
   return `Eres un ASSISTENTE DE DIRECCIÓN EXPERTO para cine y televisión en Latinoamérica. Haces DESGLOSE DE PRODUCCIÓN (script breakdown) tipo Movie Magic / StudioBinder, completo y preciso.
 
 ${chunkBlock}
@@ -118,7 +173,7 @@ Cada escena:
 - elements: [{ "category", "name" }], nunca vacío; siempre incluye "cast" con todos los personajes de la escena.
 
 OCTAVOS (crítico):
-${octavosClosing}
+${octavosClosing}${octavosEstimate}
 - 8 octavos = 1 página. La UI muestra p.ej. "1 3/8" si pageEighths = 11.
 
 CAST (obligatorio en cada escena — crítico):
@@ -151,42 +206,49 @@ REGLA DE ORO:
 Responde solo con el JSON.`
 }
 
-async function callOpenAiScenes(
+async function callClaudeScenes(
   apiKey: string,
   model: string,
   systemPrompt: string,
   userContent: string
 ): Promise<{ scenes: unknown[]; usage?: number }> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }],
       temperature: 0.2,
-      max_tokens: 16384,
+      max_tokens: 32768,
     }),
   })
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`OpenAI ${res.status}: ${err.slice(0, 400)}`)
+    throw new Error(`Anthropic ${res.status}: ${err.slice(0, 400)}`)
   }
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-    usage?: { total_tokens?: number }
+    content?: Array<{ type?: string; text?: string }>
+    usage?: { input_tokens?: number; output_tokens?: number }
   }
-  const content = data.choices?.[0]?.message?.content?.trim()
-  if (!content) throw new Error('Respuesta vacía de OpenAI')
+  const content = data.content
+    ?.filter((b) => b.type === 'text')
+    .map((b) => b.text ?? '')
+    .join('')
+    .trim()
+  if (!content) throw new Error('Respuesta vacía de Claude')
   const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
   const parsed = JSON.parse(cleaned) as { scenes?: unknown[] }
   if (!Array.isArray(parsed.scenes)) throw new Error('Falta array scenes en JSON')
-  return { scenes: parsed.scenes, usage: data.usage?.total_tokens }
+  const usage =
+    data.usage != null
+      ? (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0)
+      : undefined
+  return { scenes: parsed.scenes, usage }
 }
 
 function scalePageEighthsToTarget(
@@ -221,12 +283,12 @@ function scalePageEighthsToTarget(
 export async function POST(request: Request) {
   console.log('[parse-script] POST received')
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey || !apiKey.trim()) {
     return NextResponse.json(
       {
-        error: 'Falta OPENAI_API_KEY en .env.local.',
-        hint: 'Añade OPENAI_API_KEY y reinicia el servidor.',
+        error: 'Falta ANTHROPIC_API_KEY en .env.local.',
+        hint: 'Añade ANTHROPIC_API_KEY y reinicia el servidor.',
       },
       { status: 500 }
     )
@@ -264,7 +326,7 @@ export async function POST(request: Request) {
 
   const categoriesList = BREAKDOWN_CATEGORY_KEYS.join(', ')
   const totalPages = typeof body.totalPages === 'number' && body.totalPages > 0 ? body.totalPages : null
-  const model = 'gpt-4o-mini'
+  const model = 'claude-haiku-4-5'
 
   const blocks = splitScriptIntoSceneBlocks(text)
   if (blocks.length === 0) {
@@ -291,7 +353,7 @@ export async function POST(request: Request) {
       const batch = batches[i]!
       const userContent = batch.join('\n\n')
       const systemPrompt = buildSystemPrompt(categoriesList, totalPages, chunkMode, i, batches.length)
-      const { scenes: rawScenes, usage } = await callOpenAiScenes(apiKey, model, systemPrompt, userContent)
+      const { scenes: rawScenes, usage } = await callClaudeScenes(apiKey, model, systemPrompt, userContent)
       console.log('[parse-script] chunk', i + 1, '/', batches.length, 'escenas:', rawScenes.length, 'tokens:', usage ?? '?')
 
       for (const raw of rawScenes) {
@@ -304,12 +366,12 @@ export async function POST(request: Request) {
     }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    console.error('[parse-script] Error OpenAI:', message)
+    console.error('[parse-script] Error Claude:', message)
     return NextResponse.json(
       {
-        error: 'Error de OpenAI o JSON inválido',
+        error: 'Error de Claude o JSON inválido',
         details: message.slice(0, 500),
-        hint: 'Revisa OPENAI_API_KEY y la consola del servidor.',
+        hint: 'Revisa ANTHROPIC_API_KEY y la consola del servidor.',
       },
       { status: 502 }
     )
@@ -321,6 +383,27 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: 'No se detectaron escenas.', hint: 'Comprueba que el texto tenga cabeceras INT./EXT.' },
       { status: 502 }
+    )
+  }
+
+  // Octavos deterministas por palabras: si los bloques de escena del guion coinciden
+  // 1 a 1 (en orden) con las escenas devueltas, calculamos octavos en el servidor y
+  // los del LLM quedan solo como respaldo.
+  const sceneBlocks = blocks.filter(isSceneBlock)
+  let eighthsFromText = false
+  if (sceneBlocks.length === scenes.length) {
+    const eighths = computeEighthsFromBlocks(sceneBlocks, totalPages)
+    scenes.forEach((s, i) => {
+      ;(s as { pageEighths: number }).pageEighths = eighths[i]!
+    })
+    eighthsFromText = true
+    console.log('[parse-script] octavos por conteo de palabras (' + scenes.length + ' escenas)')
+  } else {
+    console.log(
+      '[parse-script] octavos del LLM (bloques:',
+      sceneBlocks.length,
+      'vs escenas:',
+      scenes.length + ')'
     )
   }
 
@@ -341,7 +424,7 @@ export async function POST(request: Request) {
     }
   }
 
-  if (totalPages != null) {
+  if (!eighthsFromText && totalPages != null) {
     scalePageEighthsToTarget(scenes, totalPages * 8)
   }
 

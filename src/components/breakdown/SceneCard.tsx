@@ -6,7 +6,6 @@ import {
   BREAKDOWN_CATEGORIES,
   BREAKDOWN_CATEGORY_ORDER,
 } from '@/lib/constants/categories'
-import { formatEighthsOctavosOnly } from '@/lib/utils/eighths'
 import type { IntExt, DayNight } from '@/types'
 import { cn } from '@/lib/utils'
 import type { BreakdownCategoryKey } from '@/types'
@@ -47,6 +46,16 @@ function groupElementsByCategoryKey(elements: SceneElementItem[]) {
     byCat[cat]!.push(e.breakdown_elements.name)
   }
   return byCat
+}
+
+/** 7→"7/8", 8→"1", 12→"1 4/8" (nunca "12/8") */
+function pagesLabel(eighths: number): string {
+  const e = Math.max(0, Math.round(Number(eighths)) || 0)
+  const full = Math.floor(e / 8)
+  const rem = e % 8
+  if (rem === 0) return `${full} pág.`
+  if (full === 0) return `${rem}/8 pág.`
+  return `${full} ${rem}/8 pág.`
 }
 
 export function SceneCard({
@@ -114,7 +123,7 @@ export function SceneCard({
               </span>
             )}
             <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
-              {formatEighthsOctavosOnly(pageEighths)} pág.
+              {pagesLabel(pageEighths)}
             </span>
           </div>
 

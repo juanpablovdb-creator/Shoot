@@ -2,7 +2,14 @@
  * Parte el guion en bloques por cabecera de escena (INT./EXT.) para poder enviar
  * trozos completos al modelo sin cortar a mitad de escena ni perder escenas largas.
  */
-const SCENE_HEADING_LINE = /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|EST\.)\s+/i
+const SCENE_HEADING_LINE =
+  /^(?:\d+[A-Za-z]?\s*[.)-]?\s*)?(INT\.|EXT\.|INT\/EXT\.|I\/E\.|EST\.)\s+/i
+
+/** Un bloque es escena si su primera línea es una cabecera INT./EXT. (con o sin número). */
+export function isSceneBlock(block: string): boolean {
+  const firstLine = block.split('\n', 1)[0]?.trim() ?? ''
+  return SCENE_HEADING_LINE.test(firstLine)
+}
 
 export function splitScriptIntoSceneBlocks(fullText: string): string[] {
   const text = fullText.replace(/\r\n/g, '\n')

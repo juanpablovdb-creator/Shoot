@@ -13,7 +13,7 @@ Cada variable en **una línea**, sin espacios alrededor del `=`.
 
 **Opcional (importar guiones con IA):**
 
-- `OPENAI_API_KEY` – Para usar “Importar guion” y el parseo automático del desglose con IA
+- `ANTHROPIC_API_KEY` – Para usar “Importar guion” y el parseo automático del desglose con IA (Claude)
 
 ## Si ves "Faltan NEXT_PUBLIC_SUPABASE_URL..."
 
